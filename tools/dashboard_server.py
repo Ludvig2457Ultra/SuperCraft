@@ -34,7 +34,8 @@ BUGS = [
     ("jni-log-spam", "JNI stubs flooded stderr every engine tick"),
     ("out-of-range", "False out_of_range report after EGL init"),
     ("destructor-storm", "Recursive destructor storm during teardown"),
-    ("network-teardown", "Network thread teardown crashes at rip=0x4"),
+    ("network-teardown", "Bogus SIGTERM handler jumped to rip=0x4"),
+    ("percent-rounding", "Dashboard rounded away the 0.1% commit step"),
     ("stdio-corrupt", "Foreign FILE* crashes libc stdio guards"),
     ("fmod-audio", "FMOD audio output unavailable in runner"),
 ]

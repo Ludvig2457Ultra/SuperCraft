@@ -38,8 +38,9 @@ let bgIndex = -1;
 let lastCommitHash = null;
 
 const clamp = (n) => Math.max(0, Math.min(100, Number(n) || 0));
+/* Один знак после запятой обязателен: шаг равен 0.1% за коммит, поэтому
+ * округление до целого скрывало каждое новое исправление. */
 const r1 = (n) => Number(n || 0).toFixed(1);
-const r0 = (n) => Math.round(Number(n) || 0);
 
 function setBar(node, done) {
   node.style.width = `${clamp(done).toFixed(2)}%`;
@@ -149,17 +150,17 @@ function render(data) {
   const bugs = data.bugfix;
 
   // Hero — SuperCraft is the main subject of the stream.
-  dom.heroRemain.innerHTML = `${r0(sc.remaining)}<span>%</span>`;
+  dom.heroRemain.innerHTML = `${r1(sc.remaining)}<span>%</span>`;
   dom.heroBar.style.width = `${clamp(sc.done).toFixed(2)}%`;
-  dom.heroFoot.textContent = `${r0(sc.done)}% complete · ${sc.state.toLowerCase()}`;
+  dom.heroFoot.textContent = `${r1(sc.done)}% complete · ${sc.state.toLowerCase()}`;
 
   // Runner cards.
   setBar(dom.scBar, sc.done);
   setBar(dom.mclBar, mcl.done);
-  dom.scPct.textContent = `${r0(sc.done)}%`;
-  dom.mclPct.textContent = `${r0(mcl.done)}%`;
-  dom.scHint.textContent = `${r0(sc.remaining)}% left · ${sc.state.toLowerCase()}`;
-  dom.mclHint.textContent = `${r0(mcl.remaining)}% left · ${mcl.state.toLowerCase()}`;
+  dom.scPct.textContent = `${r1(sc.done)}%`;
+  dom.mclPct.textContent = `${r1(mcl.done)}%`;
+  dom.scHint.textContent = `${r1(sc.remaining)}% left · ${sc.state.toLowerCase()}`;
+  dom.mclHint.textContent = `${r1(mcl.remaining)}% left · ${mcl.state.toLowerCase()}`;
   dom.scStatus.textContent = sc.remaining > 0 ? 'IN DEVELOPMENT' : 'COMPLETE';
   dom.mclStatus.textContent = mcl.remaining > 0 ? 'IN DEVELOPMENT' : 'COMPLETE';
   dom.scCard.classList.toggle('runner--final', sc.remaining === 0);
