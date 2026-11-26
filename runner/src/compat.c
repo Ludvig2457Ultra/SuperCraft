@@ -777,10 +777,17 @@ void *xcb_wait_for_special_event(void *c, void *se) {
     (void)c; (void)se;
     static void *(*real)(void *, void *);
     if (!getenv("SUP_XCB_NO_WAIT")) {
-        if (!real) real = (void *(*)(void *, void *))
-            real_dlsym("xcb_wait_for_special_event");
+        if (!real) {
+            real = (void *(*)(void *, void *))
+                real_dlsym("xcb_wait_for_special_event");
+            if (!real) {
+                real = (void *(*)(void *, void *))
+                    dlsym(RTLD_NEXT, "xcb_wait_for_special_event");
+            }
+        }
         if (real) return real(c, se);
     }
+    /* Или события нет, или ждать нельзя — возвращаем «нет special event». */
     return NULL;
 }
 
