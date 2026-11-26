@@ -748,6 +748,13 @@ static jvalue call_method(JNIEnv *e, jobject obj, jmethodID id, jvalue *args, in
             ret.l = (jobject)fnNewStringUTF(e, "11111111-1111-1111-1111-111111111111");
             return ret;
         }
+        if (strcmp(m->name, "getAndroidVersion") == 0 &&
+            m->sig && strstr(m->sig, "String")) {
+            fprintf(stderr, "JNI: call_method.getAndroidVersion() -> \"11\"\n");
+            fflush(stderr);
+            ret.l = (jobject)fnNewStringUTF(e, "11");
+            return ret;
+        }
         if (strcmp(m->name, "calculateAvailableDiskFreeSpace") == 0) {
             /* Android: StatFs(path).availableBytes. Раньше метод уходил в
              * unbound и возвращал 0 — движок решал, что места нет, и мог
@@ -796,6 +803,7 @@ static jvalue call_method(JNIEnv *e, jobject obj, jmethodID id, jvalue *args, in
             int hit = 0;
             if (!strcmp(nm, "getDisplayWidth") || !strcmp(nm, "getScreenWidth")) { v = 1280; hit = 1; }
             else if (!strcmp(nm, "getDisplayHeight") || !strcmp(nm, "getScreenHeight")) { v = 720; hit = 1; }
+            else if (!strcmp(nm, "getAndroidVersion")) { v = 30; hit = 1; } /* Android 11 / API 30 */
             else if (!strcmp(nm, "getNumCores")) { v = 4; hit = 1; }
             else if (!strcmp(nm, "getNumClusters")) { v = 1; hit = 1; }
             else if (!strcmp(nm, "getPerformanceCoreCount")) { v = 2; hit = 1; }
@@ -1208,6 +1216,11 @@ static jobject game_virtual(JNIEnv *e, jobject o, jmethodID mid) {
             fprintf(stderr, "JNI: Virtual.createUUID() -> fixed\n");
             fflush(stderr);
             return (jobject)fnNewStringUTF(e, "11111111-1111-1111-1111-111111111111");
+        }
+        if (strcmp(m->name, "getAndroidVersion") == 0) {
+            fprintf(stderr, "JNI: Virtual.getAndroidVersion() -> \"11\"\n");
+            fflush(stderr);
+            return (jobject)fnNewStringUTF(e, "11");
         }
 
         /* --- crash manager --- */

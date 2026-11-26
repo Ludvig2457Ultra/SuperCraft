@@ -43,6 +43,7 @@ BUGS = [
     ("aligned-alloc", "Aligned heap blocks lost their allocator header"),
     ("stale-free-memory", "Freed heap blocks kept stale object pointers"),
     ("disk-free-space", "Disk-free JNI call returned zero instead of real space"),
+    ("android-version", "Android version JNI calls returned empty values"),
 ]
 BUG_IDS = {bug_id for bug_id, _ in BUGS}
 
