@@ -28,6 +28,7 @@ BUGS = [
     ("firefox-x11", "Firefox: запуск в Wayland давал чёрный эфир"),
     ("window-capture", "x11grab: захват служебного окна вместо Firefox"),
     ("port-conflict", "8080: старый http.server мешал дашборду"),
+    ("remaining-metric", "Дашборд показывал коммиты вместо остатка работы"),
     ("dns-rtmp", "RTMP: DNS не резолвил a.rtmp.youtube.com"),
     ("43pct", "43% boot barrier: загрузка стоит после снятия deadlock"),
 ]
@@ -89,9 +90,13 @@ def collect() -> dict:
     mcl_total = git_count(MCL_REPO)
     mcl_recent = git_count(MCL_REPO, "--since=30 days ago")
 
-    # Обе полосы — «коммиты за 30 дней», нормализованные на одну шкалу.
-    # Никакого таймера и турбо: значения меняются только после реальных коммитов.
-    activity_target = max(10, sc_recent, mcl_recent)
+    # Главная метрика — «сколько осталось», а не число коммитов.
+    # SuperCraft: базовой готовности 2% + по 1% за каждый реальный Bug-Fix.
+    # Сейчас 8 исправлений → 10% готовности, 90% осталось.
+    sc_base = int(os.environ.get("SC_BASE_PROGRESS", "2"))
+    bug_weight = float(os.environ.get("BUG_PROGRESS_WEIGHT", "1"))
+    sc_done = min(100.0, sc_base + len(fixed) * bug_weight)
+    mcl_done = float(os.environ.get("MCL_PROGRESS", "100"))
 
     return {
         "now": int(time.time()),
@@ -106,21 +111,32 @@ def collect() -> dict:
             "percent": round(100 * len(fixed) / len(BUGS), 1),
             "ids": fixed,
         },
+        "progress": {
+            "supercraft": {
+                "done": round(sc_done, 1),
+                "remaining": round(100 - sc_done, 1),
+                "state": "в разработке",
+            },
+            "mcpelauncher": {
+                "done": round(mcl_done, 1),
+                "remaining": round(100 - mcl_done, 1),
+                "state": "завершён",
+            },
+        },
         "supercraft": {
             "name": "SuperCraft",
             "total": sc_total,
             "recent30": sc_recent,
-            "percent": round(100 * sc_recent / activity_target, 1),
+            "percent": round(sc_done, 1),
             "commits": last_commits(ROOT),
         },
         "mcpelauncher": {
             "name": "mcpelauncher",
             "total": mcl_total,
             "recent30": mcl_recent,
-            "percent": round(100 * mcl_recent / activity_target, 1),
+            "percent": round(mcl_done, 1),
             "commits": last_commits(MCL_REPO),
         },
-        "activityTarget": activity_target,
         "mclRepo": str(MCL_REPO),
     }
 

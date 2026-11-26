@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="theme-color" content="#0a1220">
-  <title>SuperCraft — Live Commit Race</title>
+  <title>SuperCraft — Live Readiness Tracker</title>
   <link rel="icon" href="assets/favicon.svg" type="image/svg+xml">
   <link rel="stylesheet" href="assets/styles.css">
 </head>
@@ -21,105 +21,101 @@
       <div class="brand">
         <span class="brand__cube" aria-hidden="true"><i></i><i></i><i></i><i></i></span>
         <span class="brand__name">SUPER<span>CRAFT</span></span>
-        <span class="brand__build">BEDROCK 1.21.70.03 · LINUX · LIVE</span>
+        <span class="brand__build">READINESS TRACKER · 24/7</span>
       </div>
       <div class="topbar__right">
-        <span class="live"><i></i> В ЭФИРЕ</span>
+        <span class="live"><i></i> LIVE</span>
         <span class="clock" id="clock">00:00</span>
       </div>
     </header>
 
     <section class="hero">
       <div>
-        <p class="eyebrow">LIVE COMMIT RACE / РЕАЛЬНЫЕ ДАННЫЕ</p>
-        <h1>Гонка коммитов</h1>
-        <p class="hero__sub">SuperCraft <b>против</b> mcpelauncher · без таймеров и турбо</p>
+        <p class="eyebrow">СКОЛЬКО ОСТАЛОСЬ / НЕ СЧИТАЕМ КОММИТЫ</p>
+        <h1>Трекер готовности</h1>
+        <p class="hero__sub">SuperCraft против mcpelauncher · данные из git и реального статуса</p>
       </div>
       <div class="score">
-        <span class="score__label">БАГФИКСЫ</span>
-        <strong id="bugPct">0%</strong>
-        <span class="score__hint" id="bugCount">0 / 6</span>
+        <span class="score__label">SUPERCRAFT · ОСТАЛОСЬ</span>
+        <strong id="heroRemain">90%</strong>
+        <span class="score__hint" id="heroDone">готово 10%</span>
       </div>
     </section>
 
-    <section class="race" aria-label="Гонка по коммитам">
-      <article class="lane lane--us">
-        <div class="lane__head">
-          <span class="lane__icon">◆</span>
-          <div class="lane__who">
-            <strong>SuperCraft</strong>
-            <span>наш раннер · исправления в эфире</span>
+    <!-- Таблица гонки: сверху тот, у кого больше готовности -->
+    <section class="board" aria-label="Гонка готовности">
+      <article class="row row--mcl" id="mclRow">
+        <div class="row__rank">01</div>
+        <div class="row__main">
+          <div class="row__head">
+            <span class="row__icon">▲</span>
+            <div class="row__who">
+              <strong>mcpelauncher</strong>
+              <span>minecraft-linux/mcpelauncher-manifest</span>
+            </div>
+            <span class="chip chip--done" id="mclChip">ЗАВЕРШЁН</span>
+            <span class="row__left" id="mclLeft">0% осталось</span>
+            <strong class="row__pct" id="mclDone">100%</strong>
           </div>
-          <span class="chip chip--us" id="usTotal">0 коммитов</span>
+          <div class="track">
+            <div class="track__fill" id="mclFill"><span class="track__shine"></span></div>
+            <div class="track__remainder" id="mclRemainder"></div>
+            <div class="track__ticks" aria-hidden="true"></div>
+          </div>
+          <p class="last-commit" id="mclLast">—</p>
         </div>
-        <div class="track">
-          <div class="track__fill" id="usFill"><span class="track__shine"></span></div>
-          <div class="track__runner" id="usRunner" aria-hidden="true">◆</div>
-          <div class="track__ticks" aria-hidden="true"></div>
-        </div>
-        <div class="lane__meta">
-          <span id="usStage">коммиты за 30 дней</span>
-          <strong id="usPct">0%</strong>
-        </div>
-        <div class="lane__facts">
-          <div><span>ЗА 30 ДНЕЙ</span><b id="usRecent">0</b></div>
-          <div><span>ВСЕГО</span><b id="usTotalFact">0</b></div>
-        </div>
-        <p class="last-commit" id="usLast">—</p>
-
-        <!-- Список багов: статус меняется только после коммита с Bug-Fix: -->
-        <ul class="fixes" id="fixList" aria-label="Исправления багов"></ul>
       </article>
 
-      <div class="mid" aria-hidden="true">
-        <span class="mid__line"></span>
-        <span class="mid__badge">VS</span>
-        <span class="mid__line"></span>
-      </div>
-
-      <article class="lane lane--them">
-        <div class="lane__head">
-          <span class="lane__icon lane__icon--them">▲</span>
-          <div class="lane__who">
-            <strong>mcpelauncher</strong>
-            <span>minecraft-linux/mcpelauncher-manifest</span>
+      <article class="row row--sc" id="scRow">
+        <div class="row__rank">02</div>
+        <div class="row__main">
+          <div class="row__head">
+            <span class="row__icon">◆</span>
+            <div class="row__who">
+              <strong>SuperCraft</strong>
+              <span>нативный раннер · багфиксы в эфире</span>
+            </div>
+            <span class="chip chip--dev" id="scChip">В РАЗРАБОТКЕ</span>
+            <span class="row__left" id="scLeft">90% осталось</span>
+            <strong class="row__pct" id="scDone">10%</strong>
           </div>
-          <span class="chip chip--them" id="themTotal">0 коммитов</span>
-        </div>
-        <div class="track track--them">
-          <div class="track__fill" id="themFill"><span class="track__shine"></span></div>
-          <div class="track__runner" id="themRunner" aria-hidden="true">▲</div>
-          <div class="track__ticks" aria-hidden="true"></div>
-        </div>
-        <div class="lane__meta">
-          <span id="themStage">коммиты за 30 дней</span>
-          <strong id="themPct">0%</strong>
-        </div>
-        <div class="lane__facts">
-          <div><span>ЗА 30 ДНЕЙ</span><b id="themRecent">0</b></div>
-          <div><span>ВСЕГО</span><b id="themTotalFact">0</b></div>
-        </div>
-        <p class="last-commit" id="themLast">—</p>
-
-        <div class="bug-panel">
-          <p><b>Прогресс Багфиксов</b> растёт только после коммита с трейлером <code>Bug-Fix: id</code>.</p>
-          <div class="bug-panel__bar"><span id="bugFill"></span></div>
-          <span class="bug-panel__label" id="bugLabel">ожидание коммита</span>
+          <div class="track">
+            <div class="track__fill" id="scFill"><span class="track__shine"></span></div>
+            <div class="track__remainder" id="scRemainder"></div>
+            <div class="track__ticks" aria-hidden="true"></div>
+          </div>
+          <p class="last-commit" id="scLast">—</p>
         </div>
       </article>
     </section>
 
-    <section class="telemetry" aria-label="Телеметрия репозиториев">
-      <div class="cell"><span>SC КОММИТОВ</span><strong id="tSc">0</strong></div>
-      <div class="cell"><span>MCL КОММИТОВ</span><strong id="tMcl">0</strong></div>
-      <div class="cell"><span>ОТРЫВ / 30Д</span><strong id="gap">±0</strong></div>
-      <div class="cell"><span>АПТАЙМ ЭФИРА</span><strong id="uptime">00:00</strong></div>
-      <div class="cell cell--accent"><span>ИСТОЧНИК</span><strong id="apiState">—</strong></div>
+    <section class="lower">
+      <div class="bug-card">
+        <div class="bug-card__head">
+          <div>
+            <p class="eyebrow">АКТИВНЫЕ ИСПРАВЛЕНИЯ</p>
+            <h2>Багфиксы</h2>
+          </div>
+          <strong id="bugPct">0%</strong>
+          <span id="bugCount">0 / 9</span>
+        </div>
+        <div class="bug-card__bar"><span id="bugFill"></span></div>
+        <p class="bug-card__label" id="bugLabel">ожидание коммита</p>
+        <ul class="fixes fixes--compact" id="fixList" aria-label="Исправления багов"></ul>
+      </div>
+
+      <div class="facts">
+        <div class="cell"><span>SC ГОТОВО</span><strong id="tScDone">10%</strong></div>
+        <div class="cell"><span>SC ОСТАЛОСЬ</span><strong id="tScLeft">90%</strong></div>
+        <div class="cell"><span>MCL ГОТОВО</span><strong id="tMclDone">100%</strong></div>
+        <div class="cell"><span>ЭФИР</span><strong id="uptime">00:00</strong></div>
+        <div class="cell cell--accent"><span>ИСТОЧНИК</span><strong id="apiState">git</strong></div>
+      </div>
     </section>
 
     <footer class="controls">
       <button class="btn" id="refresh" type="button">↻ Обновить из git</button>
-      <span class="controls__hint">данные берутся из локальных репозиториев каждые 2 секунды</span>
+      <span class="controls__hint">процент растёт только после реального коммита с Bug-Fix:</span>
     </footer>
   </main>
 
