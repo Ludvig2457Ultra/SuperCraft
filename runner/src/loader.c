@@ -1512,18 +1512,17 @@ static void log_trap_install(void *fn) {
 }
 
 static void sup_net_thread_exit(void) {
-    /* Сетевой поток игры свалился на переходе по NULL (RIP=4) — это её
-     * обычный teardown при недоступной сети. pthread_exit здесь гоняет
-     * C++-unwinder и падает в libgcc, после чего crash_handler делает
-     * _exit(0) и рендер обрывается. Паркуем поток: он больше не нужен,
-     * а процесс продолжает рисовать. */
+    /* Резервный путь на случай, если кто-то ещё зарегистрирует обработчик
+     * сигнал с неверным адресом. Основная причина RIP=0x4 устранена ниже в
+     * sup_signal/sup_sigaction: игра ставила SIGTERM-обработчик на 0x4, и
+     * ядро переходило туда при доставке сигнала. */
     for (;;) pause();
 }
 
-/* teardown сетевого потока (RIP=0x4) подавлен — игра завершила основной
- * цикл. Последующие крахи ВНЕ игры означают разрушение финализирующихся
- * модулей (например, movaps на кривом кадре в ld-linux); игра уже нельзя —
- * выходим кодом 0 вместо краш-дампа. */
+/* Резервное подавление перехода на 0x4. После исправления обработчиков
+ * сигналов этот путь не срабатывает (проверено: 0 NETQUIT за 70 с и 90k
+ * кадров). SUP_NET_DUMP=1 отключает подавление и печатает полный стек —
+ * так причина и была найдена. */
 static volatile sig_atomic_t g_netquit_done;
 
 static void crash_handler(int sig, siginfo_t *si, void *uctx) {
@@ -1537,11 +1536,11 @@ static void crash_handler(int sig, siginfo_t *si, void *uctx) {
     }
     in_crash = 1;
     void *rip = (void *)uc->uc_mcontext.gregs[REG_RIP];
-    /* RIP=0x4 — переход на адрес 4 как на код: финальный разрушающий краш
-     * сетевого потока, неизменно следует за eglDestroySurface=1 (игра уже
-     * отрисовала полный цикл). JNI-токены при этом валидны. Не разбираем —
-     * тихо завершаем поток, прогон продолжается. */
-    if (sig == SIGSEGV && (uintptr_t)rip == 4) {
+    /* RIP=0x4 раньше трактовался как «финальный teardown», но дамп стека
+     * показал sigaction(15, 0x4): игра ставила SIGTERM-обработчик на адрес 4,
+     * ядро доставило сигнал и прыгнуло на 0x4. Причина исправлена в
+     * sup_signal/sup_sigaction, здесь оставлен только страховочный путь. */
+    if (sig == SIGSEGV && (uintptr_t)rip == 4 && !getenv("SUP_NET_DUMP")) {
         static volatile sig_atomic_t net_suppressed = 0;
         net_suppressed++;
         g_netquit_done = 1;
@@ -2264,6 +2263,16 @@ static int real_sigprocmask(int how, const sigset_t *set, sigset_t *old) {
 
 static void *(*signal_fn_real)(int, void *(*)(int));
 
+static void sup_sig_noop(int sig) {
+    fprintf(stderr, "SIGSHIM> no-op handler for sig=%d\n", sig);
+    fflush(stderr);
+}
+
+static int bogus_handler(void *h) {
+    uintptr_t v = (uintptr_t)h;
+    return v && v < 0x10000;
+}
+
 /* signal() shim */
 static void (*sup_signal(int sig, void (*h)(int)))(int) {
     sup_prep_crash_sa();
@@ -2271,6 +2280,12 @@ static void (*sup_signal(int sig, void (*h)(int)))(int) {
         struct sigaction old;
         if (real_sigaction(sig, &g_crash_sa, &old) != 0) memset(&old, 0, sizeof old);
         return old.sa_handler;
+    }
+    if (bogus_handler(h)) {
+        fprintf(stderr, "SIGSHIM> signal(sig=%d, handler=%p) — подменяем на no-op\n",
+                sig, (void *)h);
+        fflush(stderr);
+        h = sup_sig_noop;
     }
     if (!signal_fn_real) signal_fn_real = (void *(*)(int, void *(*)(int)))dlsym(RTLD_NEXT, "signal");
     if (!signal_fn_real) return SIG_ERR;
@@ -2285,6 +2300,15 @@ static int sup_sigaction(int sig, const struct sigaction *act, struct sigaction 
         if (real_sigaction(sig, &g_crash_sa, &old) != 0) memset(&old, 0, sizeof old);
         if (oldact) *oldact = old;
         return 0;
+    }
+    if (act && bogus_handler((void *)act->sa_handler)) {
+        struct sigaction safe = *act;
+        fprintf(stderr, "SIGSHIM> sigaction(sig=%d, handler=%p) — подменяем на no-op\n",
+                sig, (void *)act->sa_handler);
+        fflush(stderr);
+        safe.sa_handler = sup_sig_noop;
+        safe.sa_flags &= ~SA_SIGINFO;
+        return real_sigaction(sig, &safe, oldact);
     }
     return real_sigaction(sig, act, oldact);
 }

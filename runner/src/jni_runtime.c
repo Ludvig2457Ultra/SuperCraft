@@ -201,6 +201,19 @@ static JClass *find_or_make_class(const char *name) {
     return c;
 }
 
+/* Возвращаемый объектный дескриптор вида "Lcom/mojang/.../Store;" ->
+ * имя класса для JClass-заглушки. Без этого все unbound-объекты стали
+ * java/lang/Object, и engine звал store-методы не на том классе. */
+static const char *class_from_ret(const char *rd, char *buf, size_t cap) {
+    if (!rd || rd[0] != 'L' || !cap) return "java/lang/Object";
+    const char *semi = strchr(rd + 1, ';');
+    size_t n = semi ? (size_t)(semi - (rd + 1)) : 0;
+    if (!n || n >= cap) return "java/lang/Object";
+    memcpy(buf, rd + 1, n);
+    buf[n] = '\0';
+    return buf;
+}
+
 static JClass *objclass_of(jobject o) {
     if (!o) return NULL;
 
@@ -916,8 +929,13 @@ static jvalue call_method(JNIEnv *e, jobject obj, jmethodID id, jvalue *args, in
             }
             if (close && close[1] == 'L') {
                 /* Строка: движок потом зовёт GetStringUTFChars, поэтому нужен
-                 * настоящий jstring с осмысленным содержимым, а не JClass. */
-                if (strstr(m->sig, "Ljava/lang/String;")) {
+                 * настоящий jstring с осмысленным содержимым, а не JClass.
+                 * Тип возврата лежит ПОСЛЕ ')': раньше здесь искали
+                 * "Ljava/lang/String;" во всей сигнатуре, и метод
+                 * createGooglePlayStore(String,StoreListener)Store
+                 * возвращал "Linux" вместо объекта. Движок звал на этой
+                 * строке getRealmsSkuPrefix и падал на rip=0x4. */
+                if (strcmp(close + 1, "Ljava/lang/String;") == 0) {
                     const char *val = "Linux";
                     if (strstr(m->name, "Model")) val = "SuperCraft PC";
                     else if (strstr(m->name, "CPUType")) val = "x86_64";
@@ -944,11 +962,13 @@ static jvalue call_method(JNIEnv *e, jobject obj, jmethodID id, jvalue *args, in
                     fflush(stderr);
                     ret.l = (jobject)s;
                 } else {
-                    JClass *generic = find_or_make_class("java/lang/Object");
-                    fprintf(stderr, "JNI: unbound obj-return -> generic java/lang/Object %p\n",
-                            (void *)generic);
+                    char cbuf[256];
+                    const char *cname = class_from_ret(close + 1, cbuf, sizeof cbuf);
+                    JClass *stub = find_or_make_class(cname);
+                    fprintf(stderr, "JNI: unbound obj-return %s -> %s %p\n",
+                            m->name ? m->name : "?", cname, (void *)stub);
                     fflush(stderr);
-                    ret.l = (jobject)generic;
+                    ret.l = (jobject)stub;
                 }
             }
         }
