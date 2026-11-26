@@ -1,123 +1,123 @@
 <!doctype html>
-<html lang="ru">
+<html lang="en">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="theme-color" content="#0a1220">
+  <meta name="theme-color" content="#060d18">
   <title>SuperCraft — Live Readiness Tracker</title>
   <link rel="icon" href="assets/favicon.svg" type="image/svg+xml">
   <link rel="stylesheet" href="assets/styles.css">
 </head>
 <body>
-  <div class="scene" aria-hidden="true">
-    <div class="scene__grid"></div>
-    <div class="scene__glow scene__glow--cyan"></div>
-    <div class="scene__glow scene__glow--violet"></div>
-    <div class="scene__lines"><i></i><i></i><i></i><i></i><i></i><i></i></div>
+  <div class="backdrop" aria-hidden="true">
+    <div class="backdrop__aurora backdrop__aurora--cyan"></div>
+    <div class="backdrop__aurora backdrop__aurora--violet"></div>
+    <div class="backdrop__grid"></div>
+    <div class="backdrop__scan"></div>
   </div>
 
-  <main class="dash">
+  <div class="shell">
     <header class="topbar">
       <div class="brand">
-        <span class="brand__cube" aria-hidden="true"><i></i><i></i><i></i><i></i></span>
-        <span class="brand__name">SUPER<span>CRAFT</span></span>
-        <span class="brand__build">READINESS TRACKER · 24/7</span>
+        <span class="brand__mark" aria-hidden="true"><i></i><i></i><i></i><i></i></span>
+        <div class="brand__text">
+          <strong>SUPER<span>CRAFT</span></strong>
+          <small>LIVE READINESS TRACKER</small>
+        </div>
       </div>
-      <div class="topbar__right">
-        <span class="live"><i></i> LIVE</span>
-        <span class="clock" id="clock">00:00</span>
+      <div class="topbar__meta">
+        <span class="live"><i></i>ON AIR</span>
+        <span class="divider"></span>
+        <span class="clock" id="clock">00:00:00</span>
       </div>
     </header>
 
     <section class="hero">
-      <div>
-        <p class="eyebrow">СКОЛЬКО ОСТАЛОСЬ / НЕ СЧИТАЕМ КОММИТЫ</p>
-        <h1>Трекер готовности</h1>
-        <p class="hero__sub">SuperCraft против mcpelauncher · данные из git и реального статуса</p>
+      <div class="hero__copy">
+        <p class="kicker">THE BUILD RACE · REAL DATA ONLY</p>
+        <h1>How much is <em>left</em>?</h1>
+        <p class="hero__sub">Two runners. One finish line. No timers, no turbo.</p>
       </div>
-      <div class="score">
-        <span class="score__label">SUPERCRAFT · ОСТАЛОСЬ</span>
-        <strong id="heroRemain">90%</strong>
-        <span class="score__hint" id="heroDone">готово 10%</span>
+      <div class="hero__focus" id="scFocusCard">
+        <span class="hero__focus-label">SUPERCRAFT · REMAINING</span>
+        <strong id="heroRemain">90<span>%</span></strong>
+        <div class="hero__focus-bar"><i id="heroBar"></i></div>
+        <span class="hero__focus-foot" id="heroFoot">10% complete · in development</span>
       </div>
     </section>
 
-    <!-- Таблица гонки: сверху тот, у кого больше готовности -->
-    <section class="board" aria-label="Гонка готовности">
-      <article class="row row--mcl" id="mclRow">
-        <div class="row__rank">01</div>
-        <div class="row__main">
-          <div class="row__head">
-            <span class="row__icon">▲</span>
-            <div class="row__who">
-              <strong>mcpelauncher</strong>
-              <span>minecraft-linux/mcpelauncher-manifest</span>
-            </div>
-            <span class="chip chip--done" id="mclChip">ЗАВЕРШЁН</span>
-            <span class="row__left" id="mclLeft">0% осталось</span>
-            <strong class="row__pct" id="mclDone">100%</strong>
+    <section class="board" aria-label="Readiness leaderboard">
+      <article class="runner runner--mcl" id="mclCard">
+        <span class="runner__rank">01</span>
+        <span class="runner__badge">▲</span>
+        <div class="runner__info">
+          <div class="runner__title">
+            <strong>mcpelauncher</strong>
+            <span class="status status--done" id="mclStatus">COMPLETE</span>
           </div>
-          <div class="track">
-            <div class="track__fill" id="mclFill"><span class="track__shine"></span></div>
-            <div class="track__remainder" id="mclRemainder"></div>
-            <div class="track__ticks" aria-hidden="true"></div>
-          </div>
-          <p class="last-commit" id="mclLast">—</p>
+          <p>minecraft-linux/mcpelauncher-manifest</p>
+          <div class="progress"><i id="mclBar"></i><b></b></div>
+          <span class="runner__hint" id="mclHint">0% left · finished</span>
+        </div>
+        <div class="runner__score">
+          <strong id="mclPct">100%</strong>
+          <small>COMPLETE</small>
         </div>
       </article>
 
-      <article class="row row--sc" id="scRow">
-        <div class="row__rank">02</div>
-        <div class="row__main">
-          <div class="row__head">
-            <span class="row__icon">◆</span>
-            <div class="row__who">
-              <strong>SuperCraft</strong>
-              <span>нативный раннер · багфиксы в эфире</span>
-            </div>
-            <span class="chip chip--dev" id="scChip">В РАЗРАБОТКЕ</span>
-            <span class="row__left" id="scLeft">90% осталось</span>
-            <strong class="row__pct" id="scDone">10%</strong>
+      <article class="runner runner--sc" id="scCard">
+        <span class="runner__rank">02</span>
+        <span class="runner__badge">◆</span>
+        <div class="runner__info">
+          <div class="runner__title">
+            <strong>SuperCraft</strong>
+            <span class="status status--dev" id="scStatus">IN DEVELOPMENT</span>
           </div>
-          <div class="track">
-            <div class="track__fill" id="scFill"><span class="track__shine"></span></div>
-            <div class="track__remainder" id="scRemainder"></div>
-            <div class="track__ticks" aria-hidden="true"></div>
-          </div>
-          <p class="last-commit" id="scLast">—</p>
+          <p>native Bedrock runner · fixes land live</p>
+          <div class="progress"><i id="scBar"></i><b></b></div>
+          <span class="runner__hint" id="scHint">90% left · keep going</span>
+        </div>
+        <div class="runner__score">
+          <strong id="scPct">10%</strong>
+          <small>COMPLETE</small>
         </div>
       </article>
     </section>
 
-    <section class="lower">
-      <div class="bug-card">
-        <div class="bug-card__head">
+    <section class="panels">
+      <article class="panel panel--fixes">
+        <div class="panel__head">
           <div>
-            <p class="eyebrow">АКТИВНЫЕ ИСПРАВЛЕНИЯ</p>
-            <h2>Багфиксы</h2>
+            <p class="kicker">ACTIVE WORK</p>
+            <h2>Fixes</h2>
           </div>
-          <strong id="bugPct">0%</strong>
-          <span id="bugCount">0 / 9</span>
+          <div class="panel__count"><strong id="fixPct">0%</strong><span id="fixCount">0 / 0</span></div>
         </div>
-        <div class="bug-card__bar"><span id="bugFill"></span></div>
-        <p class="bug-card__label" id="bugLabel">ожидание коммита</p>
-        <ul class="fixes fixes--compact" id="fixList" aria-label="Исправления багов"></ul>
-      </div>
+        <div class="fix-bar"><i id="fixBar"></i></div>
+        <ul class="fixes" id="fixList"></ul>
+      </article>
 
-      <div class="facts">
-        <div class="cell"><span>SC ГОТОВО</span><strong id="tScDone">10%</strong></div>
-        <div class="cell"><span>SC ОСТАЛОСЬ</span><strong id="tScLeft">90%</strong></div>
-        <div class="cell"><span>MCL ГОТОВО</span><strong id="tMclDone">100%</strong></div>
-        <div class="cell"><span>ЭФИР</span><strong id="uptime">00:00</strong></div>
-        <div class="cell cell--accent"><span>ИСТОЧНИК</span><strong id="apiState">git</strong></div>
-      </div>
+      <article class="panel panel--music">
+        <div class="panel__head">
+          <div>
+            <p class="kicker">SOUNDTRACK</p>
+            <h2>Now playing</h2>
+          </div>
+          <div class="equalizer" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i></div>
+        </div>
+        <div class="track" id="trackTitle">We're Online</div>
+        <div class="track__artist" id="trackArtist">Miami Nights 1984</div>
+        <div class="track__dots" id="trackDots"></div>
+      </article>
     </section>
 
-    <footer class="controls">
-      <button class="btn" id="refresh" type="button">↻ Обновить из git</button>
-      <span class="controls__hint">процент растёт только после реального коммита с Bug-Fix:</span>
+    <footer class="footer">
+      <span>LIVE TELEMETRY</span>
+      <span class="footer__sep">·</span>
+      <span>FIXES COUNT ONLY WHEN COMMITTED</span>
+      <span class="footer__right" id="apiState">● CONNECTED</span>
     </footer>
-  </main>
+  </div>
 
   <script type="module" src="assets/app.js"></script>
 </body>

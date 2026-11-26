@@ -1,68 +1,54 @@
 /**
- * SuperCraft · Live Readiness Tracker
- *
- * Показываем не число коммитов, а «сколько осталось». Процент готовности
- * SuperCraft = база + реальные коммиты с Bug-Fix:. mcpelauncher — завершён.
+ * SuperCraft — Live Readiness Tracker
+ * Every number comes from /api/progress. No timers driving progress, no turbo.
  */
 
 const POLL_MS = 2000;
 
+const TRACKS = [
+  { title: "We're Online", artist: 'Miami Nights 1984' },
+  { title: 'Crystal Skies (Sped Up)', artist: 'VXLLAIN · iGRES · ENXK' },
+  { title: 'Night Drive', artist: 'X-Wave Testarossa' },
+  { title: 'Falling', artist: 'Syntarion' },
+  { title: 'Night Pulse 105', artist: 'Wizhum' },
+];
+
 const ids = [
-  'clock', 'heroRemain', 'heroDone', 'mclChip', 'mclLeft', 'mclDone',
-  'mclFill', 'mclRemainder', 'mclLast', 'scChip', 'scLeft', 'scDone',
-  'scFill', 'scRemainder', 'scLast', 'bugPct', 'bugCount', 'bugFill',
-  'bugLabel', 'fixList', 'tScDone', 'tScLeft', 'tMclDone', 'uptime',
-  'apiState', 'refresh',
+  'clock', 'heroRemain', 'heroBar', 'heroFoot', 'mclCard', 'mclStatus', 'mclBar',
+  'mclHint', 'mclPct', 'scCard', 'scStatus', 'scBar', 'scHint', 'scPct',
+  'fixPct', 'fixCount', 'fixBar', 'fixList', 'trackTitle', 'trackArtist',
+  'trackDots', 'apiState',
 ];
 const dom = Object.fromEntries(ids.map((id) => [id, document.getElementById(id)]));
 
-let lastFixSignature = '';
+let fixSignature = '';
+let trackIndex = 0;
 
-function clamp(value) {
-  return Math.max(0, Math.min(100, Number(value) || 0));
-}
+const clamp = (n) => Math.max(0, Math.min(100, Number(n) || 0));
+const r1 = (n) => Number(n || 0).toFixed(1);
+const r0 = (n) => Math.round(Number(n) || 0);
 
-function setBar(fill, remainder, done) {
-  const pct = clamp(done);
-  fill.style.transform = `scaleX(${(pct / 100).toFixed(4)})`;
-  // Остаток начинается там, где кончается заливка.
-  remainder.style.left = `${pct.toFixed(2)}%`;
-  remainder.style.right = '0';
-}
-
-function fmtDuration(seconds) {
-  const s = Math.max(0, Math.floor(seconds || 0));
-  return `${String(Math.floor(s / 60)).padStart(2, '0')}:${String(s % 60).padStart(2, '0')}`;
+function setBar(node, done) {
+  node.style.width = `${clamp(done).toFixed(2)}%`;
 }
 
 function clockText(unix) {
   return new Date((unix || Date.now() / 1000) * 1000)
-    .toLocaleTimeString('ru-RU', { hour12: false });
-}
-
-function lastCommitLine(repo) {
-  const c = repo.commits && repo.commits[0];
-  return c ? `<b>${c.hash}</b> · ${c.date} · ${c.subject}` : '—';
+    .toLocaleTimeString('en-GB', { hour12: false });
 }
 
 function renderFixes(bugs) {
-  const signature = bugs.map((b) => `${b.id}:${b.fixed}`).join('|');
-  if (signature === lastFixSignature) return;
-  lastFixSignature = signature;
-
+  const signature = bugs.map((b) => `${b.id}${b.fixed}`).join('|');
+  if (signature === fixSignature) return;
+  fixSignature = signature;
   dom.fixList.replaceChildren();
+
   for (const bug of bugs) {
     const li = document.createElement('li');
-    li.className = `fix ${bug.fixed ? 'fix--done' : 'fix--todo'}`;
-    li.innerHTML = `
-      <span class="fix__dot"></span>
-      <span class="fix__name"></span>
-      <span class="fix__tag"></span>
-      <span class="fix__progress"><span></span></span>
-    `;
+    li.className = `fix ${bug.fixed ? 'fix--done' : 'fix--open'}`;
+    li.innerHTML = '<span class="fix__dot"></span><span class="fix__name"></span><span class="fix__tag"></span>';
     li.querySelector('.fix__name').textContent = bug.name;
-    li.querySelector('.fix__tag').textContent = bug.fixed ? '✓' : '…';
-    li.querySelector('.fix__progress span').style.width = bug.fixed ? '100%' : '0%';
+    li.querySelector('.fix__tag').textContent = bug.fixed ? 'DONE' : 'OPEN';
     dom.fixList.appendChild(li);
   }
 }
@@ -72,38 +58,45 @@ function render(data) {
   const mcl = data.progress.mcpelauncher;
   const bugs = data.bugfix;
 
-  // SuperCraft — главный герой эфира.
-  dom.heroRemain.textContent = `${sc.remaining.toFixed(0)}%`;
-  dom.heroDone.textContent = `готово ${sc.done.toFixed(0)}%`;
-  dom.scDone.textContent = `${sc.done.toFixed(0)}%`;
-  dom.scLeft.textContent = `${sc.remaining.toFixed(0)}% осталось`;
-  dom.scChip.textContent = sc.remaining > 0 ? 'В РАЗРАБОТКЕ' : 'ЗАВЕРШЁН';
-  setBar(dom.scFill, dom.scRemainder, sc.done);
-  dom.scLast.innerHTML = lastCommitLine(data.supercraft);
+  // Hero — SuperCraft is the main subject of the stream.
+  dom.heroRemain.innerHTML = `${r0(sc.remaining)}<span>%</span>`;
+  dom.heroBar.style.width = `${clamp(sc.done).toFixed(2)}%`;
+  dom.heroFoot.textContent = `${r0(sc.done)}% complete · ${sc.state.toLowerCase()}`;
 
-  // mcpelauncher — эталон, уже finished.
-  dom.mclDone.textContent = `${mcl.done.toFixed(0)}%`;
-  dom.mclLeft.textContent = `${mcl.remaining.toFixed(0)}% осталось`;
-  dom.mclChip.textContent = mcl.remaining > 0 ? 'В РАЗРАБОТКЕ' : 'ЗАВЕРШЁН';
-  setBar(dom.mclFill, dom.mclRemainder, mcl.done);
-  dom.mclLast.innerHTML = lastCommitLine(data.mcpelauncher);
+  // Runner cards.
+  setBar(dom.scBar, sc.done);
+  setBar(dom.mclBar, mcl.done);
+  dom.scPct.textContent = `${r0(sc.done)}%`;
+  dom.mclPct.textContent = `${r0(mcl.done)}%`;
+  dom.scHint.textContent = `${r0(sc.remaining)}% left · ${sc.state.toLowerCase()}`;
+  dom.mclHint.textContent = `${r0(mcl.remaining)}% left · ${mcl.state.toLowerCase()}`;
+  dom.scStatus.textContent = sc.remaining > 0 ? 'IN DEVELOPMENT' : 'COMPLETE';
+  dom.mclStatus.textContent = mcl.remaining > 0 ? 'IN DEVELOPMENT' : 'COMPLETE';
+  dom.scCard.classList.toggle('runner--final', sc.remaining === 0);
+  dom.mclCard.classList.toggle('runner--final', mcl.remaining === 0);
 
-  dom.bugPct.textContent = `${bugs.percent.toFixed(1)}%`;
-  dom.bugCount.textContent = `${bugs.fixed} / ${bugs.total}`;
-  dom.bugFill.style.width = `${bugs.percent.toFixed(1)}%`;
-  dom.bugLabel.textContent = bugs.fixed === bugs.total
-    ? 'все запланированные баги исправлены'
-    : `ждёт коммита: ${bugs.ids.length ? bugs.ids.join(', ') : 'список пуст'}`;
-
-  dom.tScDone.textContent = `${sc.done.toFixed(0)}%`;
-  dom.tScLeft.textContent = `${sc.remaining.toFixed(0)}%`;
-  dom.tMclDone.textContent = `${mcl.done.toFixed(0)}%`;
-  dom.clock.textContent = clockText(data.now);
-  dom.uptime.textContent = fmtDuration(data.uptime);
-  dom.apiState.textContent = 'git · ok';
-  dom.apiState.style.color = '';
-
+  // Fixes.
+  dom.fixPct.textContent = `${r1(bugs.percent)}%`;
+  dom.fixCount.textContent = `${bugs.fixed} / ${bugs.total}`;
+  setBar(dom.fixBar, bugs.percent);
   renderFixes(data.bugs);
+
+  dom.clock.textContent = clockText(data.now);
+  dom.apiState.textContent = '● CONNECTED';
+  dom.apiState.style.color = '';
+}
+
+function renderTrack() {
+  const track = TRACKS[trackIndex % TRACKS.length];
+  dom.trackTitle.textContent = track.title;
+  dom.trackArtist.textContent = track.artist;
+  dom.trackDots.replaceChildren();
+  TRACKS.forEach((_, i) => {
+    const dot = document.createElement('i');
+    dot.className = i === trackIndex % TRACKS.length ? 'is-active' : '';
+    dom.trackDots.appendChild(dot);
+  });
+  trackIndex += 1;
 }
 
 async function refresh() {
@@ -112,11 +105,12 @@ async function refresh() {
     if (!response.ok) throw new Error(`HTTP ${response.status}`);
     render(await response.json());
   } catch {
-    dom.apiState.textContent = 'нет связи';
+    dom.apiState.textContent = '● OFFLINE';
     dom.apiState.style.color = 'var(--red)';
   }
 }
 
-dom.refresh.addEventListener('click', refresh);
+renderTrack();
+setInterval(renderTrack, 7000);
 refresh();
 setInterval(refresh, POLL_MS);

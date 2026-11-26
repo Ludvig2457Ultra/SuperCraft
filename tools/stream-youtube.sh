@@ -6,7 +6,7 @@
 #   printf '%s' '...' > ~/.yt_stream_key  # файл с правами 600
 #
 # Захват: окно Firefox (не корень экрана!), музыка — локальный луп из assets/.
-# Подстройки: RES, FPS, VIDEO_BITRATE, AUDIO_SOURCE=system|loop|<pulse source>,
+# Подстройки: RES, FPS, VIDEO_BITRATE, AUDIO_SOURCE=system|<pulse source>,
 #             YT_WINDOW_ID=0x..., DISPLAY.
 set -euo pipefail
 
@@ -91,15 +91,10 @@ fi
 
 # ── Музыка ────────────────────────────────────────────────────────────────
 case "$AUDIO_SOURCE" in
-  loop)
-    LOOP="${LOOP_TRACK:-$ROOT/assets/supercraft-loop.wav}"
-    [[ -r "$LOOP" ]] || { printf 'Нет музыкального лупа: %s\n' "$LOOP" >&2; exit 1; }
-    AUDIO_INPUT=(-stream_loop -1 -i "$LOOP")
-    ;;
   epic)
-    # Два трека, которые просили в эфир: Miami Nights 1984 и Crystal Skies.
+    # Пять треков по просьбе автора эфира, склеены без пауз.
     LOOP="${EPIC_TRACK:-$ROOT/assets/supercraft-hits.mp3}"
-    [[ -r "$LOOP" ]] || { printf 'Нет эпичного трека: %s\n' "$LOOP" >&2; exit 1; }
+    [[ -r "$LOOP" ]] || { printf 'Нет музыкального файла: %s\n' "$LOOP" >&2; exit 1; }
     AUDIO_INPUT=(-stream_loop -1 -i "$LOOP")
     ;;
   *)

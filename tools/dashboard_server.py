@@ -22,15 +22,15 @@ MCL_REPO = Path(os.environ.get("MCL_REPO", "/home/artem/mcpelauncher-manifest"))
 # Планируемые багфиксы. Процент растёт только когда появляется коммит с
 # трейлером `Bug-Fix: <id>` и этим идентификатором.
 BUGS = [
-    ("open-variadic", "open/open64: терялся variadic mode при O_CREAT"),
-    ("xcb-deadlock", "xcb special-event: deadlock с игровым мьютексом"),
-    ("ui-callback", "UI-callback: мусор вместо указателя функции"),
-    ("firefox-x11", "Firefox: запуск в Wayland давал чёрный эфир"),
-    ("window-capture", "x11grab: захват служебного окна вместо Firefox"),
-    ("port-conflict", "8080: старый http.server мешал дашборду"),
-    ("remaining-metric", "Дашборд показывал коммиты вместо остатка работы"),
-    ("dns-rtmp", "RTMP: DNS не резолвил a.rtmp.youtube.com"),
-    ("43pct", "43% boot barrier: загрузка стоит после снятия deadlock"),
+    ("open-variadic", "open/open64: variadic mode lost on O_CREAT"),
+    ("xcb-deadlock", "xcb special-event: deadlock with the game mutex"),
+    ("ui-callback", "UI callback: garbage pointer instead of function"),
+    ("firefox-x11", "Firefox: Wayland launch produced a black stream"),
+    ("window-capture", "x11grab: captured a helper window, not Firefox"),
+    ("port-conflict", "Port 8080: old http.server blocked the dashboard"),
+    ("remaining-metric", "Dashboard showed commits instead of work left"),
+    ("dns-rtmp", "RTMP: DNS could not resolve a.rtmp.youtube.com"),
+    ("43pct", "43% boot barrier: startup stalls after deadlock fix"),
 ]
 BUG_IDS = {bug_id for bug_id, _ in BUGS}
 
