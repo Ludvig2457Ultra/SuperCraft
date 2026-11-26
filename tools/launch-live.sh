@@ -11,6 +11,7 @@ printf 'Останавливаю старый эфир…\n'
 pkill -x ffmpeg 2>/dev/null || true
 pkill -x firefox 2>/dev/null || true
 pkill -f '[d]ashboard_server.py' 2>/dev/null || true
+pkill -f '[h]ttp.server 8080' 2>/dev/null || true
 
 printf 'Запускаю дашборд (реальные коммиты из git)…\n'
 setsid python3 "$ROOT/tools/dashboard_server.py" \

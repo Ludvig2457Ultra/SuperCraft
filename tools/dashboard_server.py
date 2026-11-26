@@ -27,6 +27,7 @@ BUGS = [
     ("ui-callback", "UI-callback: мусор вместо указателя функции"),
     ("firefox-x11", "Firefox: запуск в Wayland давал чёрный эфир"),
     ("window-capture", "x11grab: захват служебного окна вместо Firefox"),
+    ("port-conflict", "8080: старый http.server мешал дашборду"),
     ("dns-rtmp", "RTMP: DNS не резолвил a.rtmp.youtube.com"),
     ("43pct", "43% boot barrier: загрузка стоит после снятия deadlock"),
 ]
