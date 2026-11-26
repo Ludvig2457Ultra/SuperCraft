@@ -3,65 +3,123 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="theme-color" content="#070b12">
-  <title>SuperCraft — загрузка мира</title>
+  <meta name="theme-color" content="#0a1220">
+  <title>SuperCraft — Live Commit Race</title>
   <link rel="icon" href="assets/favicon.svg" type="image/svg+xml">
   <link rel="stylesheet" href="assets/styles.css">
 </head>
 <body>
-  <!-- Декоративный слой: сетка, скорости, свечение. Не мешает доступности. -->
   <div class="scene" aria-hidden="true">
-    <div class="grid"></div>
-    <div class="glow glow--left"></div>
-    <div class="glow glow--right"></div>
-    <div class="speed-lines">
-      <i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i>
-    </div>
+    <div class="scene__grid"></div>
+    <div class="scene__glow scene__glow--cyan"></div>
+    <div class="scene__glow scene__glow--violet"></div>
+    <div class="scene__lines"><i></i><i></i><i></i><i></i><i></i><i></i></div>
   </div>
 
-  <main class="loader" id="loader">
-    <header class="brand">
-      <span class="brand__mark" aria-hidden="true"><i></i><i></i><i></i><i></i></span>
-      <span class="brand__name">SUPER<span>CRAFT</span></span>
-      <span class="brand__tag">BEDROCK · LINUX</span>
+  <main class="dash">
+    <header class="topbar">
+      <div class="brand">
+        <span class="brand__cube" aria-hidden="true"><i></i><i></i><i></i><i></i></span>
+        <span class="brand__name">SUPER<span>CRAFT</span></span>
+        <span class="brand__build">BEDROCK 1.21.70.03 · LINUX · LIVE</span>
+      </div>
+      <div class="topbar__right">
+        <span class="live"><i></i> В ЭФИРЕ</span>
+        <span class="clock" id="clock">00:00</span>
+      </div>
     </header>
 
-    <section class="panel" aria-labelledby="stage-title">
-      <div class="panel__head">
-        <div>
-          <p class="eyebrow">ЗАПУСК МИРА</p>
-          <h1 class="stage" id="stage-title">Подготовка чанков</h1>
+    <section class="hero">
+      <div>
+        <p class="eyebrow">LIVE COMMIT RACE / РЕАЛЬНЫЕ ДАННЫЕ</p>
+        <h1>Гонка коммитов</h1>
+        <p class="hero__sub">SuperCraft <b>против</b> mcpelauncher · без таймеров и турбо</p>
+      </div>
+      <div class="score">
+        <span class="score__label">БАГФИКСЫ</span>
+        <strong id="bugPct">0%</strong>
+        <span class="score__hint" id="bugCount">0 / 6</span>
+      </div>
+    </section>
+
+    <section class="race" aria-label="Гонка по коммитам">
+      <article class="lane lane--us">
+        <div class="lane__head">
+          <span class="lane__icon">◆</span>
+          <div class="lane__who">
+            <strong>SuperCraft</strong>
+            <span>наш раннер · исправления в эфире</span>
+          </div>
+          <span class="chip chip--us" id="usTotal">0 коммитов</span>
         </div>
-        <div class="percent">
-          <span id="percent">0</span><small>%</small>
+        <div class="track">
+          <div class="track__fill" id="usFill"><span class="track__shine"></span></div>
+          <div class="track__runner" id="usRunner" aria-hidden="true">◆</div>
+          <div class="track__ticks" aria-hidden="true"></div>
         </div>
+        <div class="lane__meta">
+          <span id="usStage">коммиты за 30 дней</span>
+          <strong id="usPct">0%</strong>
+        </div>
+        <div class="lane__facts">
+          <div><span>ЗА 30 ДНЕЙ</span><b id="usRecent">0</b></div>
+          <div><span>ВСЕГО</span><b id="usTotalFact">0</b></div>
+        </div>
+        <p class="last-commit" id="usLast">—</p>
+
+        <!-- Список багов: статус меняется только после коммита с Bug-Fix: -->
+        <ul class="fixes" id="fixList" aria-label="Исправления багов"></ul>
+      </article>
+
+      <div class="mid" aria-hidden="true">
+        <span class="mid__line"></span>
+        <span class="mid__badge">VS</span>
+        <span class="mid__line"></span>
       </div>
 
-      <div class="progress" id="progress" role="progressbar"
-           aria-label="Прогресс загрузки" aria-valuemin="0"
-           aria-valuemax="100" aria-valuenow="0">
-        <div class="progress__track">
-          <div class="progress__fill" id="fill"><span class="progress__shine"></span></div>
-          <div class="progress__ticks" aria-hidden="true"></div>
+      <article class="lane lane--them">
+        <div class="lane__head">
+          <span class="lane__icon lane__icon--them">▲</span>
+          <div class="lane__who">
+            <strong>mcpelauncher</strong>
+            <span>minecraft-linux/mcpelauncher-manifest</span>
+          </div>
+          <span class="chip chip--them" id="themTotal">0 коммитов</span>
         </div>
-        <div class="progress__meta">
-          <span id="detail">Инициализация рендера</span>
-          <span id="eta">≈ 0.0 с</span>
+        <div class="track track--them">
+          <div class="track__fill" id="themFill"><span class="track__shine"></span></div>
+          <div class="track__runner" id="themRunner" aria-hidden="true">▲</div>
+          <div class="track__ticks" aria-hidden="true"></div>
         </div>
-      </div>
+        <div class="lane__meta">
+          <span id="themStage">коммиты за 30 дней</span>
+          <strong id="themPct">0%</strong>
+        </div>
+        <div class="lane__facts">
+          <div><span>ЗА 30 ДНЕЙ</span><b id="themRecent">0</b></div>
+          <div><span>ВСЕГО</span><b id="themTotalFact">0</b></div>
+        </div>
+        <p class="last-commit" id="themLast">—</p>
 
-      <dl class="telemetry" aria-label="Телеметрия загрузки">
-        <div class="telemetry__cell"><dt>FPS</dt><dd id="fps">0</dd></div>
-        <div class="telemetry__cell"><dt>Чанков/с</dt><dd id="chunks">0</dd></div>
-        <div class="telemetry__cell"><dt>Память</dt><dd id="mem">0 МБ</dd></div>
-        <div class="telemetry__cell"><dt>Поток</dt><dd id="throughput">0 Мбит/с</dd></div>
-      </dl>
+        <div class="bug-panel">
+          <p><b>Прогресс Багфиксов</b> растёт только после коммита с трейлером <code>Bug-Fix: id</code>.</p>
+          <div class="bug-panel__bar"><span id="bugFill"></span></div>
+          <span class="bug-panel__label" id="bugLabel">ожидание коммита</span>
+        </div>
+      </article>
+    </section>
+
+    <section class="telemetry" aria-label="Телеметрия репозиториев">
+      <div class="cell"><span>SC КОММИТОВ</span><strong id="tSc">0</strong></div>
+      <div class="cell"><span>MCL КОММИТОВ</span><strong id="tMcl">0</strong></div>
+      <div class="cell"><span>ОТРЫВ / 30Д</span><strong id="gap">±0</strong></div>
+      <div class="cell"><span>АПТАЙМ ЭФИРА</span><strong id="uptime">00:00</strong></div>
+      <div class="cell cell--accent"><span>ИСТОЧНИК</span><strong id="apiState">—</strong></div>
     </section>
 
     <footer class="controls">
-      <button class="btn" id="restart" type="button">Перезапустить</button>
-      <button class="btn btn--ghost" id="turbo" type="button" aria-pressed="false">Турбо ×2</button>
-      <span class="controls__hint">плавное обновление · 60 FPS</span>
+      <button class="btn" id="refresh" type="button">↻ Обновить из git</button>
+      <span class="controls__hint">данные берутся из локальных репозиториев каждые 2 секунды</span>
     </footer>
   </main>
 

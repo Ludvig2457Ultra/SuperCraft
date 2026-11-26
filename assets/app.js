@@ -1,139 +1,126 @@
 /**
- * SuperCraft — демонстрационный экран загрузки.
+ * SuperCraft · Live Commit Race
  *
- * state — единственный источник правды; DOM обновляется только когда значение
- * реально изменилось. Анимация идёт через requestAnimationFrame: вкладка не
- * уходит в простой, а ползунок не дёргается на границах кадров.
+ * Никаких таймеров_progress и «турбо». Все проценты приходят из /api/progress,
+ * который считает реальные коммиты в локальных git-репозиториях.
  */
 
-const STAGES = [
-  { at: 0,   title: 'Подготовка чанков',     detail: 'Инициализация рендера' },
-  { at: 18,  title: 'Загрузка мира',         detail: 'Декодирование чанков' },
-  { at: 42,  title: 'Компиляция шейдеров',   detail: 'llvmpipe · GLSL кэш' },
-  { at: 66,  title: 'Синхронизация активов', detail: 'Пакеты и текстуры' },
-  { at: 88,  title: 'Почти готово',          detail: 'Запуск игрового цикла' },
-  { at: 100, title: 'Мир готов',             detail: 'Добро пожаловать в SuperCraft' },
+const POLL_MS = 2000;
+
+const ids = [
+  'clock', 'bugPct', 'bugCount', 'usTotal', 'usFill', 'usRunner', 'usPct',
+  'usStage', 'usRecent', 'usTotalFact', 'usLast', 'fixList', 'themTotal',
+  'themFill', 'themRunner', 'themPct', 'themStage', 'themRecent',
+  'themTotalFact', 'themLast', 'bugFill', 'bugLabel', 'tSc', 'tMcl',
+  'gap', 'uptime', 'apiState', 'refresh',
 ];
+const dom = Object.fromEntries(ids.map((id) => [id, document.getElementById(id)]));
 
-const BASE_RATE = 26;    // процентов в секунду на обычной скорости
-const TURBO_FACTOR = 2;  // множитель кнопки «Турбо»
-const TELEMETRY_MS = 80; // как часто пересчитывать циферблаты
+let timer = 0;
+let lastSignature = '';
 
-const dom = {
-  root: document.documentElement,
-  stage: document.getElementById('stage-title'),
-  percent: document.getElementById('percent'),
-  detail: document.getElementById('detail'),
-  eta: document.getElementById('eta'),
-  progress: document.getElementById('progress'),
-  fill: document.getElementById('fill'),
-  fps: document.getElementById('fps'),
-  chunks: document.getElementById('chunks'),
-  mem: document.getElementById('mem'),
-  throughput: document.getElementById('throughput'),
-  restart: document.getElementById('restart'),
-  turbo: document.getElementById('turbo'),
-};
-
-const state = {
-  value: 0,
-  shown: -1,
-  turbo: false,
-  running: true,
-  lastFrame: 0,
-  lastTelemetry: 0,
-  stageIndex: -1,
-};
-
-/** Плавная скорость: разгон в начале, мягкий спад на финише. */
-function rateAt(value) {
-  const curve = 0.65 + 0.9 * Math.sin((Math.PI * value) / 100);
-  return BASE_RATE * curve * (state.turbo ? TURBO_FACTOR : 1);
+function clamp(value) {
+  return Math.max(0, Math.min(100, Number(value) || 0));
 }
 
-function stageAt(value) {
-  let index = 0;
-  for (let i = 1; i < STAGES.length; i += 1) {
-    if (value >= STAGES[i].at) index = i;
-  }
-  return index;
+function setTrack(fill, runner, percent) {
+  const pct = clamp(percent);
+  fill.style.transform = `scaleX(${(pct / 100).toFixed(4)})`;
+  runner.style.left = `${Math.max(1, Math.min(99, pct)).toFixed(2)}%`;
 }
 
-function renderFrame() {
-  const value = state.value;
-  const rounded = Math.min(100, Math.floor(value));
+function fmtDuration(seconds) {
+  const s = Math.max(0, Math.floor(seconds || 0));
+  return `${String(Math.floor(s / 60)).padStart(2, '0')}:${String(s % 60).padStart(2, '0')}`;
+}
 
-  // transform дешевле width: не пересчитывается layout родителя.
-  dom.fill.style.transform = `scaleX(${(value / 100).toFixed(4)})`;
+function clockText(unix) {
+  const d = new Date((unix || Date.now() / 1000) * 1000);
+  return d.toLocaleTimeString('ru-RU', { hour12: false });
+}
 
-  if (rounded !== state.shown) {
-    state.shown = rounded;
-    dom.percent.textContent = String(rounded);
-    dom.progress.setAttribute('aria-valuenow', String(rounded));
-    const remaining = Math.max(0, (100 - value) / rateAt(value));
-    dom.eta.textContent = remaining < 0.05 ? 'готово' : `≈ ${remaining.toFixed(1)} с`;
-  }
+function renderCommits(node, commits) {
+  if (!commits || !commits.length) return '—';
+  const c = commits[0];
+  return `<b>${c.hash}</b> · ${c.date} · ${c.subject}`;
+}
 
-  const index = stageAt(value);
-  if (index !== state.stageIndex) {
-    state.stageIndex = index;
-    dom.stage.textContent = STAGES[index].title;
-    dom.detail.textContent = STAGES[index].detail;
+function renderFixes(bugs) {
+  const signature = bugs.map((b) => `${b.id}:${b.fixed}`).join('|');
+  if (signature === lastSignature) return;
+  lastSignature = signature;
+
+  dom.fixList.replaceChildren();
+  for (const bug of bugs) {
+    const li = document.createElement('li');
+    li.className = `fix ${bug.fixed ? 'fix--done' : 'fix--todo'}`;
+    li.innerHTML = `
+      <span class="fix__dot"></span>
+      <span class="fix__name"></span>
+      <span class="fix__tag"></span>
+      <span class="fix__progress"><span></span></span>
+    `;
+    li.querySelector('.fix__name').textContent = bug.name;
+    li.querySelector('.fix__tag').textContent = bug.fixed ? '✓ закоммичено' : 'ждёт коммита';
+    li.querySelector('.fix__progress span').style.width = bug.fixed ? '100%' : '0%';
+    dom.fixList.appendChild(li);
   }
 }
 
-function renderTelemetry(now) {
-  if (now - state.lastTelemetry < TELEMETRY_MS) return;
-  state.lastTelemetry = now;
+function render(data) {
+  const sc = data.supercraft;
+  const mcl = data.mcpelauncher;
+  const bugs = data.bugfix;
 
-  const rate = rateAt(state.value);
-  const wave = Math.sin(now / 170);
-  const jitter = Math.sin(now / 61) * 0.018;
+  setTrack(dom.usFill, dom.usRunner, sc.percent);
+  setTrack(dom.themFill, dom.themRunner, mcl.percent);
 
-  dom.fps.textContent = String(Math.round(59 + wave * 2 + jitter * 100));
-  dom.chunks.textContent = String(Math.round(rate * (4.2 + jitter)));
-  dom.mem.textContent = `${Math.round(184 + state.value * 3.4)} МБ`;
-  dom.throughput.textContent = `${(rate * (2.6 + jitter)).toFixed(1)} Мбит/с`;
+  dom.usPct.textContent = `${sc.percent.toFixed(1)}%`;
+  dom.themPct.textContent = `${mcl.percent.toFixed(1)}%`;
+  dom.usStage.textContent = 'коммиты за 30 дней';
+  dom.themStage.textContent = 'коммиты за 30 дней';
+
+  dom.usTotal.textContent = `${sc.total} коммитов`;
+  dom.themTotal.textContent = `${mcl.total} коммитов`;
+  dom.usTotalFact.textContent = String(sc.total);
+  dom.themTotalFact.textContent = String(mcl.total);
+  dom.usRecent.textContent = String(sc.recent30);
+  dom.themRecent.textContent = String(mcl.recent30);
+
+  dom.usLast.innerHTML = renderCommits(null, sc.commits);
+  dom.themLast.innerHTML = renderCommits(null, mcl.commits);
+
+  dom.bugPct.textContent = `${bugs.percent.toFixed(1)}%`;
+  dom.bugCount.textContent = `${bugs.fixed} / ${bugs.total}`;
+  dom.bugFill.style.width = `${bugs.percent.toFixed(1)}%`;
+  dom.bugLabel.textContent = bugs.fixed === bugs.total
+    ? 'все запланированные баги исправлены'
+    : `список: ${bugs.ids.join(', ') || 'пока пусто'}`;
+
+  const gap = sc.recent30 - mcl.recent30;
+  dom.gap.textContent = gap > 0 ? `+${gap}` : gap < 0 ? String(gap) : '±0';
+  dom.gap.style.color = gap >= 0 ? 'var(--lime)' : 'var(--violet)';
+
+  dom.tSc.textContent = String(sc.total);
+  dom.tMcl.textContent = String(mcl.total);
+  dom.clock.textContent = clockText(data.now);
+  dom.uptime.textContent = fmtDuration(data.uptime);
+  dom.apiState.textContent = 'git · ok';
+
+  renderFixes(data.bugs);
 }
 
-function frame(now) {
-  if (!state.running) return;
-
-  const dt = state.lastFrame ? Math.min((now - state.lastFrame) / 1000, 0.05) : 0;
-  state.lastFrame = now;
-
-  state.value = Math.min(100, state.value + rateAt(state.value) * dt);
-  dom.root.style.setProperty('--boost', state.turbo ? '2' : '1');
-
-  renderFrame();
-  renderTelemetry(now);
-
-  if (state.value >= 100) {
-    state.running = false;
-    dom.restart.textContent = 'Ещё раз';
-    dom.eta.textContent = 'готово';
-  } else {
-    requestAnimationFrame(frame);
+async function refresh() {
+  try {
+    const response = await fetch(`/api/progress?t=${Date.now()}`, { cache: 'no-store' });
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    render(await response.json());
+  } catch (error) {
+    dom.apiState.textContent = 'нет связи';
+    dom.apiState.style.color = 'var(--red)';
   }
 }
 
-function restart() {
-  state.value = 0;
-  state.shown = -1;
-  state.stageIndex = -1;
-  state.lastFrame = 0;
-  state.running = true;
-  dom.restart.textContent = 'Перезапустить';
-  requestAnimationFrame(frame);
-}
-
-function toggleTurbo() {
-  state.turbo = !state.turbo;
-  dom.turbo.setAttribute('aria-pressed', String(state.turbo));
-  dom.turbo.textContent = state.turbo ? 'Турбо ×2 · вкл' : 'Турбо ×2';
-}
-
-dom.restart.addEventListener('click', restart);
-dom.turbo.addEventListener('click', toggleTurbo);
-
-requestAnimationFrame(frame);
+dom.refresh.addEventListener('click', refresh);
+refresh();
+timer = setInterval(refresh, POLL_MS);
