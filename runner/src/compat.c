@@ -821,18 +821,37 @@ static void sup_log_open(const char *what, const char *path, int flags) {
     }
 }
 
+/* Должны передать variadic mode в реальный open(), иначе при O_CREAT
+ * файл создаётся со случайными правами из мусорного регистра. */
+static int sup_open_call(int (*real)(const char *, int, ...),
+                         const char *path, int flags, va_list ap) {
+    if (flags & O_CREAT) {
+        int mode = va_arg(ap, int);
+        return real(path, flags, mode);
+    }
+    return real(path, flags);
+}
+
 int open64(const char *path, int flags, ...) {
     static int (*real)(const char *, int, ...);
     if (!real) real = (int (*)(const char *, int, ...))real_dlsym("open64");
     sup_log_open("open64", path, flags);
-    return real(path, flags);
+    va_list ap;
+    va_start(ap, flags);
+    int fd = sup_open_call(real, path, flags, ap);
+    va_end(ap);
+    return fd;
 }
 
 int open(const char *path, int flags, ...) {
     static int (*real)(const char *, int, ...);
     if (!real) real = (int (*)(const char *, int, ...))real_dlsym("open");
     sup_log_open("open", path, flags);
-    return real(path, flags);
+    va_list ap;
+    va_start(ap, flags);
+    int fd = sup_open_call(real, path, flags, ap);
+    va_end(ap);
+    return fd;
 }
 
 /* Трассировка read(): какие fd и сколько читает игра. Логируем каждый
