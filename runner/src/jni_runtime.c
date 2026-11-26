@@ -9,6 +9,8 @@
 #include <errno.h>
 #include <pthread.h>
 #include <stdint.h>
+#include <sys/statvfs.h>
+#include <limits.h>
 
 void sup_render_watch(void);   /* compat.c: дамп стеков при остановке свапов */
 
@@ -744,6 +746,44 @@ static jvalue call_method(JNIEnv *e, jobject obj, jmethodID id, jvalue *args, in
             fprintf(stderr, "JNI: call_method.createUUID() -> fixed\n");
             fflush(stderr);
             ret.l = (jobject)fnNewStringUTF(e, "11111111-1111-1111-1111-111111111111");
+            return ret;
+        }
+        if (strcmp(m->name, "calculateAvailableDiskFreeSpace") == 0) {
+            /* Android: StatFs(path).availableBytes. Раньше метод уходил в
+             * unbound и возвращал 0 — движок решал, что места нет, и мог
+             * отказаться от записи мира. Возвращаем реальное свободное место
+             * на той же ФС, поднимаясь до ближайшего существующего каталога. */
+            const char *path = NULL;
+            long long freeb = 0;
+            struct statvfs st;
+            if (n > 0) {
+                JRef *r = as_ref(args[0].l, K_UTF8);
+                if (r) path = (const char *)r->data;
+            }
+            if (path && *path) {
+                if (statvfs(path, &st) == 0) {
+                    freeb = (long long)st.f_bavail * (long long)st.f_frsize;
+                } else {
+                    char buf[PATH_MAX];
+                    snprintf(buf, sizeof buf, "%s", path);
+                    char *slash = strrchr(buf, '/');
+                    while (slash && slash > buf) {
+                        *slash = 0;
+                        if (statvfs(buf, &st) == 0) {
+                            freeb = (long long)st.f_bavail * (long long)st.f_frsize;
+                            break;
+                        }
+                        slash = strrchr(buf, '/');
+                    }
+                    if (!freeb && statvfs(".", &st) == 0)
+                        freeb = (long long)st.f_bavail * (long long)st.f_frsize;
+                }
+            }
+            fprintf(stderr,
+                    "JNI: call_method.calculateAvailableDiskFreeSpace(%s) -> %lld bytes\n",
+                    path ? path : "?", freeb);
+            fflush(stderr);
+            ret.j = (jlong)freeb;
             return ret;
         }
 
