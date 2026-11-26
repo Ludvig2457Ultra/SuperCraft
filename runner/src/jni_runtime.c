@@ -230,6 +230,11 @@ void sup_ui_pump(void) {
         if (!got) break;
         uintptr_t fnptr = 0;
         memcpy(&fnptr, task, sizeof(fnptr));
+        if (!fnptr) {
+            fprintf(stderr, "JNI: UI-PUMP task без callable — пропуск\n");
+            fflush(stderr);
+            continue;
+        }
         fprintf(stderr, "JNI: UI-PUMP fn=0x%lx in_exec=%d\n",
                 (unsigned long)fnptr, sup_ptr_in_exec((const void *)fnptr));
         fflush(stderr);
