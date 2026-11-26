@@ -97,7 +97,8 @@ case "$AUDIO_SOURCE" in
     AUDIO_INPUT=(-stream_loop -1 -i "$LOOP")
     ;;
   epic)
-    LOOP="${EPIC_TRACK:-$ROOT/assets/epic-battle.mp3}"
+    # Готовый 9:52-микс из трёх роялти-фри synthwave/outrun треков.
+    LOOP="${EPIC_TRACK:-$ROOT/assets/supercraft-synthwave.mp3}"
     [[ -r "$LOOP" ]] || { printf 'Нет эпичного трека: %s\n' "$LOOP" >&2; exit 1; }
     AUDIO_INPUT=(-stream_loop -1 -i "$LOOP")
     ;;

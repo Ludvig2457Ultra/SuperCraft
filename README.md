@@ -8,8 +8,9 @@
 - `index.html` + `assets/` — дашборд гонки коммитов, список багов и статусы.
 - `tools/dashboard_server.py` — API `/api/progress`, читает локальные клоны:
   `SuperCraft` и `mcpelauncher-manifest` (путь задаётся `MCL_REPO`).
-- `assets/supercraft-loop.wav` — сгенерированный synthwave-луп для эфира
-  (источник — `tools/gen_music.py`, лицензий и внешних файлов нет).
+- `assets/supercraft-synthwave.mp3` — 9:52 synthwave/outrun-микс для эфира
+  (по стилю близок к Miami Nights 1984 / DOS-88). Три роялти-фри трека,
+  склеенные в один файл, чтобы не было пауз при смене. Источники ниже.
 - `tools/launch-live.sh` — поднимает дашборд, Firefox (X11/kiosk) и стрим.
 - `tools/stream-youtube.sh` — захват **окна Firefox** (не корня экрана) +
   музыка + RTMP с DNS-over-HTTPS fallback.
@@ -48,6 +49,23 @@ Bug-Fix: open-variadic
 Список ожидаемых идентификаторов задан в `tools/dashboard_server.py` (`BUGS`).
 Пока коммита нет — строка остаётся «ждёт коммита», процент не двигается.
 Полосы «коммиты за 30 дней» тоже считаются из `git rev-list` обеих репозиториев.
+
+## Музыка в эфире
+
+Треки Miami Nights 1984 и «Crystal Skies» с YouTube —
+коммерческие, их нельзя просто скачать и пустить в трансляцию: это Content ID
+и страйк каналу. Поэтому в эфире идёт похожий по звуку **роялти-фри** микс:
+
+1. **Outrun Boulevard** — Kjartan Abel, [CC BY-SA 4.0](https://creativecommons.org/licenses/by-sa/4.0/),
+   https://kjartan-abel.com/library/outrun-boulevard/
+2. **Far Away** — DOS-88, [CC BY 3.0](https://creativecommons.org/licenses/by/3.0/),
+   https://dos88.bandcamp.com/
+3. **Retrowave** — Raspberrymusic, [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/),
+   https://raspberrysounds.bandcamp.com/track/retrowave-no-copyright-music-by-raspberrymusic
+
+Файлы взяты с Wikimedia Commons и склеены в `assets/supercraft-synthwave.mp3`.
+Авторство указано выше, как требуют лицензии. Заменить трек можно через
+`EPIC_TRACK=/путь/к/файлу ./tools/launch-live.sh`.
 
 ## Раннер
 
