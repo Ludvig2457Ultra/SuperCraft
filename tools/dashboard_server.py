@@ -41,6 +41,7 @@ BUGS = [
     ("fmod-jni-vm", "libfmod JNI_OnLoad never received the runner JavaVM"),
     ("fmod-audio", "FMOD audio output unavailable in runner"),
     ("aligned-alloc", "Aligned heap blocks lost their allocator header"),
+    ("stale-free-memory", "Freed heap blocks kept stale object pointers"),
 ]
 BUG_IDS = {bug_id for bug_id, _ in BUGS}
 

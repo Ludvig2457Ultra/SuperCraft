@@ -487,6 +487,11 @@ static void sup_free(void *p) {
     uint32_t m = *(uint32_t *)(void *)c;
     if (m == SUPCH_OK) {
         unsigned cls = ((uint32_t *)c)[2];
+        /* Игра иногда читает уже освобождённый объект: в слоты vtable/указателей
+         * попадает мусор от предыдущего владельца (вплоть до текста session-id
+         * Breakpad), и деструктор уходит в рекурсивный шторм. Обнуляем данные
+         * пользователя при free — мусор становится NULL, цикл сходится. */
+        memset(c + 16, 0, sup_cls_tab[cls]);
         sup_alloc_lock();
         *(uintptr_t *)(void *)c = 0;
         ((uintptr_t *)(void *)c)[1] = (uintptr_t)sup_freeheads[cls];
