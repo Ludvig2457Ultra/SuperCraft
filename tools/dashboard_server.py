@@ -32,7 +32,7 @@ BUGS = [
     ("dns-rtmp", "RTMP: DNS could not resolve a.rtmp.youtube.com"),
     ("43pct", "43% boot barrier: missing APK assets and native libs"),
     ("jni-log-spam", "JNI stubs flooded stderr every engine tick"),
-    ("out-of-range", "std::out_of_range after EGL init"),
+    ("out-of-range", "False out_of_range report after EGL init"),
     ("destructor-storm", "Recursive destructor storm during teardown"),
     ("network-teardown", "Network thread teardown crashes at rip=0x4"),
     ("stdio-corrupt", "Foreign FILE* crashes libc stdio guards"),

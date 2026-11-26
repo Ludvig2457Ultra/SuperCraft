@@ -1406,12 +1406,14 @@ static void vt_patch_once(void *fn) {
     (void)fn;
 }
 
-/* Одноразовые int3-ловушки на собственные реализации __throw_out_of_range
- * игры (слабые, лежат в .text игры, лоадер их не резолвит, поэтому наш
- * хук через resolve_symbol не срабатывал). При срабатывании откатываем
- * байт и RIP -> функция выполняется нормально, но мы видим стек зова. */
+/* Одноразовые int3-ловушки для трассировки точек загрузки. Две из них —
+ * реальныеweak-реализации __throw_out_of_range, остальные — выбор EGL-конфига
+ * и виртуальный вызов логгера. Настоящий бросок исключения ловится отдельным
+ * хуком в compat.c и печатается как "OOR> __throw_out_of_range вызван".
+ * Эти ловушки НЕ означают исключение: они только показывают стек вызова. */
 static void *g_oor_trap[16];
 static unsigned char g_oor_byte[16];
+static const char *g_oor_label[16];
 static int g_oor_n;
 
 /* Под gdb int3 нельзя: gdb считает его своей точкой останова и убивает
@@ -1419,7 +1421,7 @@ static int g_oor_n;
  * SIGSEGV, который gdb умеет прокидывать в наш обработчик. */
 static unsigned char g_oor_trap_byte = 0xcc;
 
-static void oor_trap_install(void *fn) {
+static void oor_trap_install(void *fn, const char *label) {
     if (!fn || g_oor_n >= 16) return;
     {
         static int inited;
@@ -1435,10 +1437,12 @@ static void oor_trap_install(void *fn) {
     unsigned char *b = (unsigned char *)fn;
     g_oor_trap[g_oor_n] = fn;
     g_oor_byte[g_oor_n] = *b;
+    g_oor_label[g_oor_n] = label ? label : "trap";
     *b = g_oor_trap_byte;            /* int3 (0xcc) или hlt (0xf4) */
     ++g_oor_n;
     mprotect((void *)pg, g_pgsz * 2, PROT_READ | PROT_EXEC);
-    fprintf(stderr, "OORTRAP> %s на %p: было %02x, стало %02x\n",
+    fprintf(stderr, "TRAPDBG> %s %s на %p: было %02x, стало %02x\n",
+            g_oor_label[g_oor_n - 1],
             g_oor_trap_byte == 0xf4 ? "hlt" : "int3",
             fn, g_oor_byte[g_oor_n - 1], b[0]);
     fflush(stderr);
@@ -1648,11 +1652,12 @@ static void crash_handler(int sig, siginfo_t *si, void *uctx) {
                           ? (rip == (char *)g_oor_trap[i])
                           : (rip == (char *)g_oor_trap[i] + 1);
             if (hit) {
-                fprintf(stderr, "\nOOR> сработала ловушка на %p\n", g_oor_trap[i]);
+                fprintf(stderr, "\nTRAPDBG> ловушка %s на %p (не исключение)\n",
+                        g_oor_label[i], g_oor_trap[i]);
                 {
                     greg_t *gg = uc->uc_mcontext.gregs;
-                    fprintf(stderr, "OOR> rdi=%#llx rsi=%#llx rdx=%#llx rcx=%#llx\n"
-                                    "OOR> rax=%#llx rbx=%#llx r8=%#llx r14=%#llx\n",
+                    fprintf(stderr, "TRAPDBG> rdi=%#llx rsi=%#llx rdx=%#llx rcx=%#llx\n"
+                                    "TRAPDBG> rax=%#llx rbx=%#llx r8=%#llx r14=%#llx\n",
                             (unsigned long long)gg[REG_RDI],
                             (unsigned long long)gg[REG_RSI],
                             (unsigned long long)gg[REG_RDX],
@@ -1661,28 +1666,9 @@ static void crash_handler(int sig, siginfo_t *si, void *uctx) {
                             (unsigned long long)gg[REG_RBX],
                             (unsigned long long)gg[REG_R8],
                             (unsigned long long)gg[REG_R14]);
-                    {
-                        uintptr_t vt = (uintptr_t)gg[REG_RAX];
-                        uintptr_t gb = (uintptr_t)g_obj.base;
-                        unsigned char vec = 0;
-                        if (vt && g_pgsz &&
-                            mincore((void *)(vt & ~(uintptr_t)(g_pgsz - 1)),
-                                    g_pgsz * 2, &vec) == 0) {
-                            unsigned long *slot = (unsigned long *)vt;
-                            fprintf(stderr,
-                                "OOR> vtable=%p (game+%#lx): [0]=%#lx [1]=%#lx [2]=%#lx -> game+%#lx\n",
-                                (void *)vt, vt - gb, slot[0], slot[1], slot[2],
-                                slot[2] >= gb ? slot[2] - gb : 0);
-                        }
-                        uintptr_t th = (uintptr_t)gg[REG_RDI];
-                        if (th && g_pgsz &&
-                            mincore((void *)(th & ~(uintptr_t)(g_pgsz - 1)),
-                                    g_pgsz * 2, &vec) == 0)
-                            fprintf(stderr, "OOR> this=%p первые 4 слова: %lx %lx %lx %lx\n",
-                                    (void *)th, ((unsigned long *)th)[0],
-                                    ((unsigned long *)th)[1], ((unsigned long *)th)[2],
-                                    ((unsigned long *)th)[3]);
-                    }
+                    /* Раньше RAX печатался как "vtable", а RDI как "this",
+                     * хотя на точках EGL это char* строки и EGLDisplay.
+                     * Вместо выдуманных типов показываем только байты. */
                     for (int k = 0; k < 2; ++k) {
                         uintptr_t p = (uintptr_t)gg[k == 0 ? REG_RSI : REG_RDX];
                         if (p > 0x10000 && p < (1ULL << 47)) {
@@ -1690,12 +1676,12 @@ static void crash_handler(int sig, siginfo_t *si, void *uctx) {
                             unsigned char vec = 0;
                             if (mincore((void *)(p & ~(uintptr_t)(g_pgsz - 1)),
                                         g_pgsz, &vec) == 0)
-                                fprintf(stderr, "OOR> %s@%#lx = [%.*s]\n",
+                                fprintf(stderr, "TRAPDBG> %s@%#lx = [%.*s]\n",
                                         k == 0 ? "rsi" : "rdx", p, 200, (const char *)q);
                         }
                     }
                 }
-                fprintf(stderr, "OOR> стек зова:\n");
+                fprintf(stderr, "TRAPDBG> стек зова:\n");
                 stack_trace(uc->uc_mcontext.gregs[REG_RSP]);
                 fflush(stderr);
                 {
@@ -2902,17 +2888,16 @@ int main(int argc, char **argv) {
     for (size_t d = 0; d < g_ndep; ++d)
         fprintf(stderr, "modules: dep[%zu] base=%p size=%zu path=%s\n",
                 d, g_deps[d].base, g_deps[d].total_size, g_deps[d].path);
-    /* Ловушки на __throw_out_of_range игры: смотрим, кто бросает
-     * std::out_of_range (текущий блокер после честных ответов EGL). */
-    oor_trap_install((char *)g_obj.base + 0xe504490);   /* vector-версия */
-    oor_trap_install((char *)g_obj.base + 0xe4b57c0);   /* string-версия */
-    oor_trap_install((char *)g_obj.base + 0xe3e0590);   /* КОНТРОЛЬ: должна
-                                                          вызываться всегда */
-    /* Точка возврата виртуального вызова (e3b2d82) — колбэк логгера,
-     * внутри которого при esi != 4 уходят в terminate. */
-    oor_trap_install((char *)g_obj.base + 0xe3b2d82);   /* call *0x10(%rax) */
+    /* Трассировка точек загрузки. Только первые две — __throw_out_of_range;
+     * e3e0590 собирает атрибуты EGL, fb474d0 — PLT eglChooseConfig. Ни одна
+     * из этих ловушек не означает, что исключение брошено. */
+    oor_trap_install((char *)g_obj.base + 0xe504490, "vector __throw_out_of_range");
+    oor_trap_install((char *)g_obj.base + 0xe4b57c0, "string __throw_out_of_range");
+    oor_trap_install((char *)g_obj.base + 0xe3e0590, "EGL config chooser");
+    /* Точка возврата виртуального вызова (e3b2d82) — колбэк логгера. */
+    oor_trap_install((char *)g_obj.base + 0xe3b2d82, "logger virtual call");
     /* Куда реально идёт вызов eglChooseConfig: PLT-стаб и сам хук из GOT. */
-    oor_trap_install((char *)g_obj.base + 0xfb474d0);   /* eglChooseConfig@plt */
+    oor_trap_install((char *)g_obj.base + 0xfb474d0, "eglChooseConfig@plt");
     /* Копия 0x10 байт в префетч-цикле: движок ставит NULL в data (+0x20)
      * узла — переживаем это (exp: пустые узлы с перевыделением). */
     node_skip_install((char *)g_obj.base + 0xdf9fd20);
@@ -2940,14 +2925,14 @@ int main(int argc, char **argv) {
                 }
             }
             fflush(stderr);
-            oor_trap_install(*gotslot);
+            oor_trap_install(*gotslot, "eglChooseConfig hook (GOT)");
         }
     }
     /* Точка, где libc++_shared печатает "terminating" и уходит в abort. */
     for (size_t d = 0; d < g_ndep; ++d) {
         if (strstr(g_deps[d].path, "libc++_shared")) {
-            oor_trap_install((char *)g_deps[d].base + 0xd8adc);
-            oor_trap_install((char *)g_deps[d].base + 0xd8a90);
+            oor_trap_install((char *)g_deps[d].base + 0xd8adc, "libc++ terminate");
+            oor_trap_install((char *)g_deps[d].base + 0xd8a90, "libc++ abort");
             break;
         }
     }
@@ -2967,7 +2952,7 @@ int main(int argc, char **argv) {
                     void *addr = symbol_address(&g_deps[d], sy);
                     /* Свой хук из libsupcompat не трогаем. */
                     void *mine = dlsym(g_compat_handle, names[n]);
-                    if (addr != mine) oor_trap_install(addr);
+                    if (addr != mine) oor_trap_install(addr, names[n]);
                     break;
                 }
             }
