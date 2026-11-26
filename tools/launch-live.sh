@@ -34,7 +34,45 @@ setsid env -u WAYLAND_DISPLAY -u XDG_SESSION_TYPE \
   /usr/lib/firefox/firefox --no-remote --profile "$PROFILE" --kiosk \
   http://localhost:8080 > "$LOG_DIR/firefox-live.log" 2>&1 < /dev/null &
 
-sleep 9
+sleep 6
+
+# Не отдавать в эфир чёрный кадр: ждём, пока окно Firefox реально отрисует
+# дашборд. Проверяем среднюю яркость одного кадра, а не только наличие окна.
+printf 'Жду отрисовку дашборда…\n'
+WID="$(DISPLAY="${DISPLAY:-:0}" XAUTHORITY="$XA" python3 - <<'PY' 2>/dev/null || true
+from Xlib import display
+try:
+    d = display.Display()
+except Exception:
+    raise SystemExit
+for w in d.screen().root.query_tree().children:
+    try:
+        if w.get_attributes().map_state != 2:
+            continue
+        g = w.get_geometry()
+        if g.width < 800 or g.height < 600:
+            continue
+        cls = tuple(c.lower() for c in (w.get_wm_class() or ()))
+        if any('firefox' in c or 'navigator' in c for c in cls):
+            print(hex(w.id))
+            break
+    except Exception:
+        pass
+PY
+)"
+for _ in $(seq 1 40); do
+  FRAME="/tmp/opencode/ff-ready-$$.png"
+  if [[ -n "$WID" ]] && DISPLAY="${DISPLAY:-:0}" XAUTHORITY="$XA" \
+      ffmpeg -hide_banner -loglevel error -f x11grab -draw_mouse 0 \
+      -window_id "$WID" -video_size 1920x1080 -i "${DISPLAY:-:0}" \
+      -frames:v 1 -y "$FRAME" 2>/dev/null; then
+    MEAN="$(python3 -c 'import sys; from PIL import Image, ImageStat; print(int(ImageStat.Stat(Image.open(sys.argv[1]).convert("L").resize((96, 54))).mean[0]))' "$FRAME" 2>/dev/null || echo 0)"
+    rm -f "$FRAME"
+    (( MEAN > 18 )) && break
+  fi
+  rm -f "$FRAME"
+  sleep 0.5
+done
 
 printf 'Запускаю стрим с музыкой…\n'
 setsid env DISPLAY="${DISPLAY:-:0}" XAUTHORITY="$XA" \

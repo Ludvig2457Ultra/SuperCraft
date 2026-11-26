@@ -1,9 +1,20 @@
 /**
  * SuperCraft — Live Readiness Tracker
  * Every number comes from /api/progress. No timers driving progress, no turbo.
+ * Background slideshow is cosmetic only and never blanks the frame: images are
+ * preloaded and cross-faded, one layer always stays visible.
  */
 
 const POLL_MS = 2000;
+const BG_MS = 12000;
+
+const BACKGROUNDS = [
+  'assets/backgrounds/bedrock-1.jpg',
+  'assets/backgrounds/bedrock-2.jpg',
+  'assets/backgrounds/bedrock-3.jpg',
+  'assets/backgrounds/bedrock-4.jpg',
+  'assets/backgrounds/bedrock-5.jpg',
+];
 
 const TRACKS = [
   { title: "We're Online", artist: 'Miami Nights 1984' },
@@ -17,12 +28,13 @@ const ids = [
   'clock', 'heroRemain', 'heroBar', 'heroFoot', 'mclCard', 'mclStatus', 'mclBar',
   'mclHint', 'mclPct', 'scCard', 'scStatus', 'scBar', 'scHint', 'scPct',
   'fixPct', 'fixCount', 'fixBar', 'fixList', 'trackTitle', 'trackArtist',
-  'trackDots', 'apiState',
+  'trackDots', 'apiState', 'bgPhotos',
 ];
 const dom = Object.fromEntries(ids.map((id) => [id, document.getElementById(id)]));
 
 let fixSignature = '';
 let trackIndex = 0;
+let bgIndex = -1;
 
 const clamp = (n) => Math.max(0, Math.min(100, Number(n) || 0));
 const r1 = (n) => Number(n || 0).toFixed(1);
@@ -35,6 +47,38 @@ function setBar(node, done) {
 function clockText(unix) {
   return new Date((unix || Date.now() / 1000) * 1000)
     .toLocaleTimeString('en-GB', { hour12: false });
+}
+
+function setupBackdrop() {
+  const host = dom.bgPhotos;
+  if (!host) return;
+
+  const photos = BACKGROUNDS.map((src) => {
+    const img = document.createElement('img');
+    img.className = 'bg-photo';
+    img.src = src;
+    img.alt = '';
+    img.decoding = 'async';
+    host.appendChild(img);
+    return img;
+  });
+
+  const activate = (next) => {
+    if (next === bgIndex) return;
+    if (bgIndex >= 0) photos[bgIndex].classList.remove('is-active');
+    bgIndex = next;
+    photos[bgIndex].classList.add('is-active');
+  };
+
+  // Show the first frame early, then rotate only after every image is ready.
+  setTimeout(() => { if (bgIndex < 0) activate(0); }, 500);
+  Promise.all(photos.map((img) => new Promise((done) => {
+    if (img.complete) return done();
+    img.onload = img.onerror = done;
+  }))).then(() => {
+    activate(bgIndex < 0 ? 0 : bgIndex);
+    setInterval(() => activate((bgIndex + 1) % photos.length), BG_MS);
+  });
 }
 
 function renderFixes(bugs) {
@@ -110,6 +154,7 @@ async function refresh() {
   }
 }
 
+setupBackdrop();
 renderTrack();
 setInterval(renderTrack, 7000);
 refresh();

@@ -62,6 +62,18 @@ Bug-Fix: open-variadic
 
 Все пять собраны в `assets/supercraft-hits.mp3` (14:32, 192 kbps) и зациклены в стриме.
 
+## Картинка эфира
+
+- `assets/supercraft-icon.png` — иконка SuperCraft (неоновый куб, нарисована локально).
+- `assets/mcpelauncher-icon.png` — иконка mcpelauncher на основе официального
+  аватара организации `minecraft-linux` с GitHub (creeper).
+- `assets/backgrounds/bedrock-*.jpg` — пять кадров Minecraft: смена каждые 12 секунд
+  с плавным приближением/отдалением (Ken Burns). Источники и лицензии —
+  `assets/backgrounds/CREDITS.md` (CC BY 3.0, Xbox México / Xbox MENA).
+- Подвижные слои фона **не используют `filter: blur()`**: именно они давали
+  чёрные кадры при захвате окна Firefox через X11. `launch-live.sh` перед стартом
+  стрима отдельно ждёт нечёрного кадра дашборда.
+
 ⚠️ Это **коммерческая музыка**: YouTube может наложить Content ID, заглушить
 запись или выдать страйк каналу. Если эфир нужно делать безопасным — положи
 роялти-фри файл и запусти с `EPIC_TRACK=/путь/к/файлу ./tools/launch-live.sh`.
