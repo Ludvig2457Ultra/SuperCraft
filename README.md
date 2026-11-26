@@ -8,9 +8,9 @@
 - `index.html` + `assets/` — дашборд гонки коммитов, список багов и статусы.
 - `tools/dashboard_server.py` — API `/api/progress`, читает локальные клоны:
   `SuperCraft` и `mcpelauncher-manifest` (путь задаётся `MCL_REPO`).
-- `assets/supercraft-synthwave.mp3` — 9:52 synthwave/outrun-микс для эфира
-  (по стилю близок к Miami Nights 1984 / DOS-88). Три роялти-фри трека,
-  склеенные в один файл, чтобы не было пауз при смене. Источники ниже.
+- `assets/supercraft-hits.mp3` — 5:10 микс из двух треков для эфира:
+  Miami Nights 1984 «We're Online» и VXLLAIN/iGRES/ENXK «Crystal Skies (Sped Up)».
+  Оригиналы лежат рядом (`miami-nights-were-online.mp3`, `crystal-skies-sped-up.mp3`).
 - `tools/launch-live.sh` — поднимает дашборд, Firefox (X11/kiosk) и стрим.
 - `tools/stream-youtube.sh` — захват **окна Firefox** (не корня экрана) +
   музыка + RTMP с DNS-over-HTTPS fallback.
@@ -52,20 +52,17 @@ Bug-Fix: open-variadic
 
 ## Музыка в эфире
 
-Треки Miami Nights 1984 и «Crystal Skies» с YouTube —
-коммерческие, их нельзя просто скачать и пустить в трансляцию: это Content ID
-и страйк каналу. Поэтому в эфире идёт похожий по звуку **роялти-фри** микс:
+По просьбе автора эфира в трансляции идут конкретные треки:
 
-1. **Outrun Boulevard** — Kjartan Abel, [CC BY-SA 4.0](https://creativecommons.org/licenses/by-sa/4.0/),
-   https://kjartan-abel.com/library/outrun-boulevard/
-2. **Far Away** — DOS-88, [CC BY 3.0](https://creativecommons.org/licenses/by/3.0/),
-   https://dos88.bandcamp.com/
-3. **Retrowave** — Raspberrymusic, [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/),
-   https://raspberrysounds.bandcamp.com/track/retrowave-no-copyright-music-by-raspberrymusic
+- **We're Online — Miami Nights 1984** · https://www.youtube.com/watch?v=JzzLxIinJO0
+- **Crystal Skies (Sped Up) — VXLLAIN, iGRES, ENXK** · https://www.youtube.com/watch?v=sKJvJCsey84
 
-Файлы взяты с Wikimedia Commons и склеены в `assets/supercraft-synthwave.mp3`.
-Авторство указано выше, как требуют лицензии. Заменить трек можно через
-`EPIC_TRACK=/путь/к/файлу ./tools/launch-live.sh`.
+Скачаны в `assets/miami-nights-were-online.mp3` и `assets/crystal-skies-sped-up.mp3`,
+склеены в `assets/supercraft-hits.mp3` (5:10, 192 kbps) и зациклены в стриме.
+
+⚠️ Это **коммерческая музыка**: YouTube может наложить Content ID, заглушить
+запись или выдать страйк каналу. Если эфир нужно делать безопасным — положи
+роялти-фри файл и запусти с `EPIC_TRACK=/путь/к/файлу ./tools/launch-live.sh`.
 
 ## Раннер
 
