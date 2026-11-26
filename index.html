@@ -1,0 +1,70 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#070b12">
+  <title>SuperCraft — загрузка мира</title>
+  <link rel="icon" href="assets/favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="assets/styles.css">
+</head>
+<body>
+  <!-- Декоративный слой: сетка, скорости, свечение. Не мешает доступности. -->
+  <div class="scene" aria-hidden="true">
+    <div class="grid"></div>
+    <div class="glow glow--left"></div>
+    <div class="glow glow--right"></div>
+    <div class="speed-lines">
+      <i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i>
+    </div>
+  </div>
+
+  <main class="loader" id="loader">
+    <header class="brand">
+      <span class="brand__mark" aria-hidden="true"><i></i><i></i><i></i><i></i></span>
+      <span class="brand__name">SUPER<span>CRAFT</span></span>
+      <span class="brand__tag">BEDROCK · LINUX</span>
+    </header>
+
+    <section class="panel" aria-labelledby="stage-title">
+      <div class="panel__head">
+        <div>
+          <p class="eyebrow">ЗАПУСК МИРА</p>
+          <h1 class="stage" id="stage-title">Подготовка чанков</h1>
+        </div>
+        <div class="percent">
+          <span id="percent">0</span><small>%</small>
+        </div>
+      </div>
+
+      <div class="progress" id="progress" role="progressbar"
+           aria-label="Прогресс загрузки" aria-valuemin="0"
+           aria-valuemax="100" aria-valuenow="0">
+        <div class="progress__track">
+          <div class="progress__fill" id="fill"><span class="progress__shine"></span></div>
+          <div class="progress__ticks" aria-hidden="true"></div>
+        </div>
+        <div class="progress__meta">
+          <span id="detail">Инициализация рендера</span>
+          <span id="eta">≈ 0.0 с</span>
+        </div>
+      </div>
+
+      <dl class="telemetry" aria-label="Телеметрия загрузки">
+        <div class="telemetry__cell"><dt>FPS</dt><dd id="fps">0</dd></div>
+        <div class="telemetry__cell"><dt>Чанков/с</dt><dd id="chunks">0</dd></div>
+        <div class="telemetry__cell"><dt>Память</dt><dd id="mem">0 МБ</dd></div>
+        <div class="telemetry__cell"><dt>Поток</dt><dd id="throughput">0 Мбит/с</dd></div>
+      </dl>
+    </section>
+
+    <footer class="controls">
+      <button class="btn" id="restart" type="button">Перезапустить</button>
+      <button class="btn btn--ghost" id="turbo" type="button" aria-pressed="false">Турбо ×2</button>
+      <span class="controls__hint">плавное обновление · 60 FPS</span>
+    </footer>
+  </main>
+
+  <script type="module" src="assets/app.js"></script>
+</body>
+</html>
