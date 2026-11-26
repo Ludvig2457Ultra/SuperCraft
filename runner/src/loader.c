@@ -808,6 +808,21 @@ static int map_load_segments(Obj *o, int fd) {
             if (r == MAP_FAILED) { perror("mmap file"); return -1; }
         }
     }
+    /* Файл отображается целыми страницами, поэтому хвост последней страницы
+     * попал бы в .bss из файла. У libfmod там оказался адрес entry point
+     * 0x50000, который код читал как JavaVM* и падал в AttachCurrentThread.
+     * ELF требует: p_memsz > p_filesz заполняется нулями до релокаций. */
+    for (size_t i = 0; i < o->phnum; ++i) {
+        ElfW(Phdr) *p = &o->phdrs[i];
+        if (p->p_type != PT_LOAD || p->p_memsz <= p->p_filesz) continue;
+        size_t zoff = p->p_vaddr + p->p_filesz;
+        size_t zlen = p->p_memsz - p->p_filesz;
+        if (zoff + zlen > o->total_size) {
+            fprintf(stderr, "warn: bss tail outside mapping in %s\n", o->path);
+            continue;
+        }
+        memset((char *)base + zoff, 0, zlen);
+    }
     return 0;
 }
 

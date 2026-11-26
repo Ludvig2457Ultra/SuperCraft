@@ -37,6 +37,7 @@ BUGS = [
     ("network-teardown", "Bogus SIGTERM handler jumped to rip=0x4"),
     ("percent-rounding", "Dashboard rounded away the 0.1% commit step"),
     ("stdio-corrupt", "Foreign FILE* crashes libc stdio guards"),
+    ("bss-zero", "Unzeroed .bss fed ELF entry pointer into FMOD as JavaVM"),
     ("fmod-audio", "FMOD audio output unavailable in runner"),
 ]
 BUG_IDS = {bug_id for bug_id, _ in BUGS}
