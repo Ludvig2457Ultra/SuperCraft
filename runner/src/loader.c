@@ -1020,14 +1020,18 @@ static fm_result fn_fm_create_channel_group(void *sys, const char *name, void **
 }
 
 static fm_result fn_fm_init(void *sys, int maxch, unsigned int flags, void *extra) {
-    fprintf(stderr, "FM> System::init(this=%p, maxch=%d flags=%#x extra=%p) "
-            "-> не инициализируем (нет Android-аудио)\n",
-            sys, maxch, flags, extra);
-    resolve_frame(__builtin_return_address(0));
-    /* libfmod на этой сборке падает в System::init: Android-выхода
-     * (OpenSL/AudioTrack) на десктопе нет, а NOSOUND тоже не спасает.
-     * Возвращаем ошибку — игра работает без звука, как и раньше с
-     * сорванным System_Create. */
+    void *fm_init_real = fm_real_for("_ZN4FMOD6System4initEijPv");
+    if (fm_init_real) {
+        /* libfmod теперь получает наш JavaVM в своём JNI_OnLoad, поэтому
+         * реальный init проходит. Output принудительно NOSOUND (см.
+         * fn_fm_set_output): звука всё ещё нет, но подсистема живая. */
+        fm_result rr = ((fm_result (*)(void *, int, unsigned int, void *))fm_init_real)
+                       (sys, maxch, flags, extra);
+        fprintf(stderr, "FM> System::init -> реальный init вернул %d\n", rr);
+        fflush(stderr);
+        return rr;
+    }
+    fprintf(stderr, "FM> System::init: реальная функция не найдена\n");
     return 20; /* FMOD_ERR_FORMAT: «аудио недоступно» */
 }
 
@@ -3111,12 +3115,27 @@ int main(int argc, char **argv) {
         fprintf(stderr, "allocator armed (game malloc->sup slabs)\n");
 #endif
         if (boot) boot();
+        typedef jint (*onload_fn)(JavaVM *, void *);
+        void *(*vmf)(void) = dlsym(g_compat_handle, "sup_jni_vm");
+        JavaVM *vm = vmf ? (JavaVM *)vmf() : NULL;
+
+        /* Android вызывает JNI_OnLoad у каждой загруженной библиотеки.
+         * libfmod регистрирует в нём JavaVM* в своём Global+0x1c8; без этого
+         * FMOD_System_Create возвращала 28, потому что GetEnv видел NULL. */
+        for (size_t d = 0; d < g_ndep; ++d) {
+            ElfW(Sym) *ds = find_symbol(&g_deps[d], "JNI_OnLoad");
+            if (!ds || ds->st_shndx == SHN_UNDEF) continue;
+            onload_fn donload = (onload_fn)symbol_address(&g_deps[d], ds);
+            if (!donload) continue;
+            jint drc = donload(vm, NULL);
+            fprintf(stderr, "loader: dep[%zu] %s JNI_OnLoad -> %d\n",
+                    d, g_deps[d].path, (int)drc);
+            fflush(stderr);
+        }
+
         ElfW(Sym) *js = find_symbol(&g_obj, "JNI_OnLoad");
         if (js && js->st_shndx != SHN_UNDEF) {
-            typedef jint (*onload_fn)(JavaVM *, void *);
             onload_fn onload = (onload_fn)symbol_address(&g_obj, js);
-            void *(*vmf)(void) = dlsym(g_compat_handle, "sup_jni_vm");
-            JavaVM *vm = vmf ? (JavaVM *)vmf() : NULL;
             fprintf(stderr, "loader: calling onload(vm=%p, NULL)\n", (void*)vm);
             fflush(stderr);
             jint rc = onload(vm, NULL);

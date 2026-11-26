@@ -38,6 +38,7 @@ BUGS = [
     ("percent-rounding", "Dashboard rounded away the 0.1% commit step"),
     ("stdio-corrupt", "Foreign FILE* crashes libc stdio guards"),
     ("bss-zero", "Unzeroed .bss fed ELF entry pointer into FMOD as JavaVM"),
+    ("fmod-jni-vm", "libfmod JNI_OnLoad never received the runner JavaVM"),
     ("fmod-audio", "FMOD audio output unavailable in runner"),
 ]
 BUG_IDS = {bug_id for bug_id, _ in BUGS}
