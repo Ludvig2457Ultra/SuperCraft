@@ -32,6 +32,27 @@ RES="${RES:-1280x720}"
 FPS="${FPS:-30}"
 BITRATE="${VIDEO_BITRATE:-4500k}"
 
+# В некоторых окружениях DNS не резолвит youtube.com, но сеть до Google есть.
+# Поднимаем адрес через DNS-over-HTTPS и подставляем IP в RTMP-URL.
+RTMP_HOST="${YT_RTMP_HOST:-a.rtmp.youtube.com}"
+RTMP_URL_HOST="$RTMP_HOST"
+if ! getent hosts "$RTMP_HOST" >/dev/null 2>&1; then
+  DOH_IP="$(curl -fsS --max-time 8 \
+    "https://dns.google/resolve?name=${RTMP_HOST}&type=A" | python3 -c '
+import json, sys
+try:
+    ans = json.load(sys.stdin).get("Answer", [])
+    print(next((a["data"] for a in ans if a.get("type") == 1), ""))
+except Exception:
+    print("")
+' 2>/dev/null || true)"
+  if [[ -n "$DOH_IP" ]]; then
+    RTMP_URL_HOST="$DOH_IP"
+    printf 'DNS для %s недоступен, использую IP из DoH: %s\n' "$RTMP_HOST" "$DOH_IP" >&2
+  fi
+fi
+RTMP_URL="rtmp://${RTMP_URL_HOST}/live2/${STREAM_KEY}"
+
 INPUTS=(-f x11grab -draw_mouse 0 -r "$FPS" -video_size "$RES" -i "$GRAB_INPUT")
 if [[ "${AUDIO:-0}" == "1" ]]; then
   INPUTS+=(-f pulse -i "${AUDIO_SOURCE:-default}")
@@ -40,7 +61,7 @@ else
 fi
 
 if [[ "${1:-}" == "--dry-run" ]]; then
-  printf 'ffmpeg %s … -f flv rtmp://a.rtmp.youtube.com/live2/<КЛЮЧ СКРЫТ>\n' "${INPUTS[*]}"
+  printf 'ffmpeg %s … -f flv rtmp://%s/live2/<КЛЮЧ СКРЫТ>\n' "${INPUTS[*]}" "$RTMP_URL_HOST"
   exit 0
 fi
 
@@ -51,4 +72,4 @@ exec ffmpeg -hide_banner -y "${INPUTS[@]}" \
   -g "$((FPS * 2))" -keyint_min "$FPS" -sc_threshold 0 \
   -b:v "$BITRATE" -maxrate "$BITRATE" -bufsize "$((2 * ${BITRATE%k}))k" \
   -c:a aac -b:a 128k -ar 44100 \
-  -f flv "rtmp://a.rtmp.youtube.com/live2/${STREAM_KEY}"
+  -f flv "$RTMP_URL"
