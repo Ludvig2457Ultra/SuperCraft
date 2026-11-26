@@ -80,14 +80,14 @@ def bugfix_ids() -> list[str]:
 
 def last_commits(cwd: Path, limit: int = 3) -> list[dict]:
     raw = git("log", f"-{limit}", "--date=short",
-              "--format=%h\t%ad\t%s%n%b%n---COMMIT---", cwd=cwd)
+              "--format=%h\t%ad\t%ct\t%s%n%b%n---COMMIT---", cwd=cwd)
     commits = []
     for block in raw.split("---COMMIT---"):
         lines = [line.strip() for line in block.strip().splitlines() if line.strip()]
         if not lines:
             continue
-        head = lines[0].split("\t", 2)
-        if len(head) != 3:
+        head = lines[0].split("\t", 3)
+        if len(head) != 4:
             continue
         # Это Description для эфирного уведомления: технический трейлер
         # Bug-Fix: не показываем, зрителю важна человеческая формулировка.
@@ -95,10 +95,15 @@ def last_commits(cwd: Path, limit: int = 3) -> list[dict]:
                         if not line.lower().startswith("bug-fix:"))
         if len(body) > 260:
             body = body[:257].rstrip() + "…"
+        try:
+            stamp = int(head[2])
+        except ValueError:
+            stamp = 0
         commits.append({
             "hash": head[0],
             "date": head[1],
-            "subject": head[2][:90],
+            "timestamp": stamp,
+            "subject": head[3][:90],
             "description": body,
         })
     return commits

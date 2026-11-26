@@ -124,7 +124,12 @@ function notifyCommits(commits) {
   if (!Array.isArray(commits) || !commits.length) return;
   if (lastCommitHash === null) {
     lastCommitHash = commits[0].hash;
-    return;                       // не спамим старыми коммитами при загрузке
+    // Если эфир перезагрузили сразу после коммита, всё равно показываем его.
+    const newest = commits[0];
+    if (newest.timestamp && Date.now() / 1000 - newest.timestamp < 180) {
+      showCommitToast(newest);
+    }
+    return;
   }
   const fresh = [];
   for (const commit of commits) {
