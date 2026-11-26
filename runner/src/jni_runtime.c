@@ -16,6 +16,51 @@ static int g_trace;
 static int g_exc;
 static char g_exc_msg[256];
 
+/* Игровой цикл зовёт tick()/getFreeMemory() и GetEnv тысячи раз в секунду.
+ * Печать каждого вызова давала >500K строк за 90 с: диск и CPU отбирались
+ * у рендера. Теперь каждое уникальное сочетание name+sig печатается один
+ * раз; повторы считаются, а итог пишется редко. */
+static void sup_unbound_log(const char *name, const char *sig, void *obj) {
+    static struct {
+        char name[64];
+        char sig[48];
+        unsigned long n;
+    } seen[64];
+    static int nseen;
+    char nb[64], sb[48];
+    int i;
+
+    snprintf(nb, sizeof nb, "%s", name ? name : "?");
+    snprintf(sb, sizeof sb, "%s", sig ? sig : "?");
+    for (i = 0; i < nseen; ++i) {
+        if (!strcmp(seen[i].name, nb) && !strcmp(seen[i].sig, sb)) {
+            ++seen[i].n;
+            if ((seen[i].n & 0xffff) == 0)
+                fprintf(stderr,
+                        "JNI: unbound %s %s: %lu calls (already reported)\n",
+                        nb, sb, seen[i].n);
+            return;
+        }
+    }
+    if (nseen < (int)(sizeof seen / sizeof seen[0])) {
+        snprintf(seen[nseen].name, sizeof seen[nseen].name, "%s", nb);
+        snprintf(seen[nseen].sig, sizeof seen[nseen].sig, "%s", sb);
+        seen[nseen].n = 1;
+        ++nseen;
+    }
+    fprintf(stderr, "JNI: *** UNBOUND native call: %s %s (this=%p) ***\n",
+            nb, sb, obj);
+    fflush(stderr);
+}
+
+static void sup_getenv_log(JavaVM *vm, JNIEnv **env, jint ver) {
+    static unsigned long n;
+    ++n;
+    if (n <= 3 || (n & 0xffff) == 0)
+        fprintf(stderr, "JNI: fnGetEnv(vm=%p env=%p ver=%#x n=%lu)\n",
+                (void *)vm, (void *)env, (unsigned)ver, n);
+}
+
 #define TRACE(...)                                                  \
     do {                                                            \
         if (g_trace) fprintf(stderr, "JNI: " __VA_ARGS__);          \
@@ -729,9 +774,7 @@ static jvalue call_method(JNIEnv *e, jobject obj, jmethodID id, jvalue *args, in
     }
 
     if (!m || !m->fn) {
-        fprintf(stderr, "JNI: *** UNBOUND native call: %s %s (this=%p) ***\n",
-                m ? m->name : "?", m ? m->sig : "?", obj);
-        fflush(stderr);
+        sup_unbound_log(m ? m->name : "?", m ? m->sig : "?", obj);
         sup_render_watch();
         /* Метод с объектным возвратом нельзя отдавать как NULL: игра сразу
          * вызывает метод на результате и падает на разыменовании NULL
@@ -1753,8 +1796,7 @@ void *fnGameInvoke(void *thiz, void *receiver, jmethodID mid, void *va) {
 }
 
 static jint fnGetEnv(JavaVM *vm, JNIEnv **env, jint ver) {
-    fprintf(stderr, "JNI: fnGetEnv(vm=%p env=%p ver=%#x)\n", (void*)vm, (void*)env, ver);
-    fflush(stderr);
+    sup_getenv_log(vm, env, ver);
     (void)vm;
     if (env) *env = (const JNIEnv_ **)(void *)g_real_env;
     if (ver == JNI_VERSION_1_1 || ver == JNI_VERSION_1_2 ||

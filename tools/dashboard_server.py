@@ -30,7 +30,8 @@ BUGS = [
     ("port-conflict", "Port 8080: old http.server blocked the dashboard"),
     ("remaining-metric", "Dashboard showed commits instead of work left"),
     ("dns-rtmp", "RTMP: DNS could not resolve a.rtmp.youtube.com"),
-    ("43pct", "43% boot barrier: startup stalls after deadlock fix"),
+    ("43pct", "43% boot barrier: missing APK assets and native libs"),
+    ("jni-log-spam", "JNI stubs flooded stderr every engine tick"),
 ]
 BUG_IDS = {bug_id for bug_id, _ in BUGS}
 
@@ -92,7 +93,7 @@ def collect() -> dict:
 
     # Главная метрика — «сколько осталось», а не число коммитов.
     # SuperCraft: базовой готовности 2% + по 1% за каждый реальный Bug-Fix.
-    # Сейчас 8 исправлений → 10% готовности, 90% осталось.
+    # Процент всегда считается из git log, а не из конфигурации дашборда.
     sc_base = int(os.environ.get("SC_BASE_PROGRESS", "2"))
     bug_weight = float(os.environ.get("BUG_PROGRESS_WEIGHT", "1"))
     sc_done = min(100.0, sc_base + len(fixed) * bug_weight)
