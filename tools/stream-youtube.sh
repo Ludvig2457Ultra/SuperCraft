@@ -138,7 +138,7 @@ if [[ "${1:-}" == "--dry-run" ]]; then
 fi
 
 # -tune zerolatency и короткий GOP — низкая задержка для «живого» стрима.
-exec ffmpeg -hide_banner -y "${GRAB_ARGS[@]}" "${AUDIO_INPUT[@]}" \
+exec ffmpeg -hide_banner -loglevel error -y "${GRAB_ARGS[@]}" "${AUDIO_INPUT[@]}" \
   -vf "scale=${RES}:flags=bicubic,format=yuv420p" \
   -c:v libx264 -preset veryfast -tune zerolatency \
   -g "$((FPS * 2))" -keyint_min "$FPS" -sc_threshold 0 \
