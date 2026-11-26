@@ -1,5 +1,5 @@
 /**
- * SuperCraft — Live Readiness Tracker
+ * SuperCraft racing — Live Readiness Tracker
  * Every number comes from /api/progress. No timers driving progress, no turbo.
  * Background slideshow is cosmetic only and never blanks the frame: images are
  * preloaded and cross-faded, one layer always stays visible.

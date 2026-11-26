@@ -97,10 +97,10 @@ def collect() -> dict:
     mcl_recent = git_count(MCL_REPO, "--since=30 days ago")
 
     # Главная метрика — «сколько осталось», а не число коммитов.
-    # SuperCraft: базовой готовности 2% + по 1% за каждый реальный Bug-Fix.
+    # SuperCraft: базовой готовности 2% + по 0.1% за каждый реальный Bug-Fix.
     # Процент всегда считается из git log, а не из конфигурации дашборда.
     sc_base = int(os.environ.get("SC_BASE_PROGRESS", "2"))
-    bug_weight = float(os.environ.get("BUG_PROGRESS_WEIGHT", "1"))
+    bug_weight = float(os.environ.get("BUG_PROGRESS_WEIGHT", "0.1"))
     sc_done = min(100.0, sc_base + len(fixed) * bug_weight)
     mcl_done = float(os.environ.get("MCL_PROGRESS", "100"))
 
