@@ -771,8 +771,10 @@ int pthread_create(sup_pthread_t *thr, void *attr, sup_start_fn start, void *arg
 
 /* NVIDIA EGL ждёт special event от Xwayland, удерживая игровой мьютекс;
  * главный поток встаёт на этот мьютекс и загрузка замирает. Env-режим
- * SUP_XCB_NO_WAIT возвращает «события нет» сразу — Deadlock снимается,
- * но сама загрузка дальше всё равно упирается в 43%. */
+ * SUP_XCB_NO_WAIT возвращает «события нет» сразу — Deadlock снимается.
+ * Оставшийся упрёк в 43% был не здесь: в каталоге версии не было ассетов
+ * и нативных библиотек из APK, поэтому AAssetManager отдавал пустые листинги.
+ * tools/run-runner.sh раскладывает их и стартует до EGL/рендера. */
 void *xcb_wait_for_special_event(void *c, void *se) {
     (void)c; (void)se;
     static void *(*real)(void *, void *);
