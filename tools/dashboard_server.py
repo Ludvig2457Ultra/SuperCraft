@@ -115,12 +115,12 @@ def collect() -> dict:
             "supercraft": {
                 "done": round(sc_done, 1),
                 "remaining": round(100 - sc_done, 1),
-                "state": "в разработке",
+                "state": "in development",
             },
             "mcpelauncher": {
                 "done": round(mcl_done, 1),
                 "remaining": round(100 - mcl_done, 1),
-                "state": "завершён",
+                "state": "complete",
             },
         },
         "supercraft": {
