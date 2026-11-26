@@ -387,6 +387,15 @@ static void sup_alloc_unlock(void) {
 static void *sup_freeheads[SUP_NCLS];
 static volatile int g_sup_alloc_armed;
 static int g_sup_disabled;
+/* Для крупных/выровненных блоков пользовательский указатель может быть
+ * смещён относительно начала mmap: запоминаем настоящую базу в [-8..0)
+ * от заголовка, чтобы free/realloc сделали munmap с правильного адреса. */
+static uintptr_t sup_lrg_base(const unsigned char *c) {
+    return *(uintptr_t *)(const void *)(c + 8);
+}
+static void sup_set_lrg_base(unsigned char *c, uintptr_t base) {
+    *(uintptr_t *)(void *)(c + 8) = base;
+}
 #ifndef SUP_NEUTRAL_ALLOC
 static void sup_arm_allocator(void) { g_sup_alloc_armed = 1; }
 #endif
@@ -423,6 +432,7 @@ static void *sup_malloc(size_t n) {
         if (b == MAP_FAILED) return NULL;
         ((uint32_t *)b)[0] = SUPCH_LRG;
         ((uint32_t *)b)[1] = (uint32_t)total;
+        sup_set_lrg_base(b, (uintptr_t)b);
         return b + 16;
     }
     unsigned cls = sup_cls_for(n);
@@ -483,7 +493,7 @@ static void sup_free(void *p) {
         sup_freeheads[cls] = c;
         sup_alloc_unlock();
     } else if (m == SUPCH_LRG) {
-        munmap(c, (size_t)((uint32_t *)c)[1]);
+        munmap((void *)sup_lrg_base(c), (size_t)((uint32_t *)c)[1]);
     } else {
         free(p); /* foreign/glibc block: let libc handle it */
     }
@@ -511,7 +521,9 @@ static void *sup_realloc(void *p, size_t n) {
         old = ((uint32_t *)c)[1];
         if (n && n <= old) { ((uint32_t *)c)[1] = (uint32_t)n; return p; }
     } else if (m == SUPCH_LRG) {
-        old = (size_t)((uint32_t *)c)[1] - 16;
+        size_t total = (size_t)((uint32_t *)c)[1];
+        uintptr_t base = sup_lrg_base(c);
+        old = p >= (void *)base ? total - ((uintptr_t)p - base) : 0;
     } else {
         return realloc(p, n); /* foreign */
     }
@@ -528,7 +540,12 @@ static size_t sup_malloc_usable_size(void *p) {
     if (!g_sup_alloc_armed) return malloc_usable_size(p);
     uint32_t m = *(uint32_t *)(void *)((unsigned char *)p - 16);
     if (m == SUPCH_OK) return ((uint32_t *)((unsigned char *)p - 16))[1];
-    if (m == SUPCH_LRG) return (size_t)((uint32_t *)((unsigned char *)p - 16))[1] - 16;
+    if (m == SUPCH_LRG) {
+        unsigned char *c = (unsigned char *)p - 16;
+        size_t total = (size_t)((uint32_t *)c)[1];
+        uintptr_t base = sup_lrg_base(c);
+        return p >= (void *)base ? total - ((uintptr_t)p - base) : 0;
+    }
     return 0;
 }
 
@@ -536,20 +553,24 @@ static int sup_posix_memalign(void **o, size_t align, size_t n) {
     if (!o) return 22; /* EINVAL */
     if (!g_sup_alloc_armed) return posix_memalign(o, align, n);
     if (align < sizeof(void *)) align = sizeof(void *);
+    if (!n) n = 1;
     if (align <= 16) { *o = sup_malloc(n); return *o ? 0 : 12; }
-    if (align <= 4096) {
-        size_t total = (n + 4095) & ~(size_t)4095;
-        unsigned char *b = mmap(NULL, total, PROT_READ | PROT_WRITE,
-                                MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
-        if (b == MAP_FAILED) return 12; /* ENOMEM */
-        ((uint32_t *)b)[0] = SUPCH_LRG;
-        ((uint32_t *)b)[1] = (uint32_t)total;
-        *o = b;
-        return 0;
-    }
-    void *base = sup_malloc(n + align);
-    if (!base) return 12;
-    *o = (void *)(((uintptr_t)base + align - 1) & ~(uintptr_t)(align - 1));
+    if (align & (align - 1)) return 22; /* POSIX: степень двойки */
+    /* Раньше заголовок писался в начало mmap, а пользователю возвращался
+     * тот же адрес. sup_free() читает заголовок по p-16 — для align>16 это
+     * была чужая страница, и free/realloc крупного выровненного блока
+     * или пропускались, или делали munmap не с того адреса. */
+    size_t total = (n + align + 16 + 4095) & ~(size_t)4095;
+    unsigned char *b = mmap(NULL, total, PROT_READ | PROT_WRITE,
+                            MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+    if (b == MAP_FAILED) return 12; /* ENOMEM */
+    uintptr_t up = ((uintptr_t)b + 16 + align - 1) & ~(uintptr_t)(align - 1);
+    unsigned char *p = (unsigned char *)up;
+    unsigned char *c = p - 16;
+    ((uint32_t *)c)[0] = SUPCH_LRG;
+    ((uint32_t *)c)[1] = (uint32_t)total;
+    sup_set_lrg_base(c, (uintptr_t)b);
+    *o = p;
     return 0;
 }
 
@@ -3113,6 +3134,20 @@ int main(int argc, char **argv) {
 #ifndef SUP_NEUTRAL_ALLOC
         sup_arm_allocator();
         fprintf(stderr, "allocator armed (game malloc->sup slabs)\n");
+        if (getenv("SUP_ALIGN_SELFTEST")) {
+            const size_t aligns[] = { 64, 256, 4096 };
+            for (size_t i = 0; i < sizeof(aligns) / sizeof(aligns[0]); ++i) {
+                void *p = NULL;
+                size_t a = aligns[i];
+                int rc = sup_posix_memalign(&p, a, 64);
+                fprintf(stderr, "ALIGNTEST> align=%zu rc=%d ptr=%p "
+                        "aligned=%d usable=%zu\n", a, rc, p,
+                        rc == 0 && ((uintptr_t)p & (a - 1)) == 0,
+                        sup_malloc_usable_size(p));
+                if (rc == 0) { memset(p, 0x5a, 64); sup_free(p); }
+            }
+            fflush(stderr);
+        }
 #endif
         if (boot) boot();
         typedef jint (*onload_fn)(JavaVM *, void *);

@@ -40,6 +40,7 @@ BUGS = [
     ("bss-zero", "Unzeroed .bss fed ELF entry pointer into FMOD as JavaVM"),
     ("fmod-jni-vm", "libfmod JNI_OnLoad never received the runner JavaVM"),
     ("fmod-audio", "FMOD audio output unavailable in runner"),
+    ("aligned-alloc", "Aligned heap blocks lost their allocator header"),
 ]
 BUG_IDS = {bug_id for bug_id, _ in BUGS}
 
