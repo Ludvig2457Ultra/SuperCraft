@@ -27,6 +27,26 @@
 #undef fgetpos
 #undef fsetpos
 
+/* Bionic stores its three standard streams in one array at a 0x98-byte
+ * stride, while glibc's FILE is 0xe0 bytes. Only the last slot holds a
+ * complete glibc handle; handing slots 0/1 to glibc aborts in
+ * _IO_vtable_check with "invalid stdio handle". Map them to the real
+ * glibc streams before any stdio call. */
+extern unsigned char __sF[];
+#define BIONIC_SFILE_SIZE 0x98u
+
+static FILE *bionic_stream(FILE *fp) {
+    if (!fp) return fp;
+    uintptr_t base = (uintptr_t)__sF;
+    uintptr_t v = (uintptr_t)fp;
+    if (v < base || v - base >= 3u * BIONIC_SFILE_SIZE) return fp;
+    switch ((v - base) / BIONIC_SFILE_SIZE) {
+        case 0: return stdin;
+        case 1: return stdout;
+        default: return stderr;
+    }
+}
+
 typedef unsigned int EGLBoolean;
 typedef int EGLint;
 typedef void *EGLDisplay;
@@ -929,10 +949,23 @@ void *realloc(void *p, size_t n) {
 static int stdio_ok(FILE *fp) {
     uintptr_t v = (uintptr_t)fp;
     if (!fp || v < 0x4096 || v > (uintptr_t)0x7fffffffffff) return 0;
+    /* mincore() требует адрес, выровненный по странице. Раньше он вызывался
+     * с самим FILE* (например 0x...a4a0), всегда возвращал EINVAL — и каждый
+     * настоящий поток glibc считался «чужим», поэтому vfprintf/fputc молча
+     * теряли весь вывод. Проверяем страницу, содержащую START и END FILE. */
+    long ps = sysconf(_SC_PAGESIZE);
+    if (ps <= 0) ps = 4096;
+    uintptr_t page = v & ~(uintptr_t)(ps - 1);
     unsigned char vec = 0;
-    if (mincore((void *)fp, 1, &vec) != 0 || (vec & 1) == 0) return 0;
-    uint64_t m = *(uint64_t *)fp;
-    return (m & 0xffff0000ull) == 0xfbad0000ull;
+    if (mincore((void *)page, (size_t)ps, &vec) != 0 || (vec & 1) == 0) return 0;
+    if (v + sizeof(FILE) > page + (uintptr_t)ps) {
+        vec = 0;
+        if (mincore((void *)(page + (uintptr_t)ps), (size_t)ps, &vec) != 0 ||
+            (vec & 1) == 0) return 0;
+    }
+    /* _flags — 32-битное поле; старшие 16 бит — магическое число 0xfbad. */
+    uint32_t flags = *(uint32_t *)fp;
+    return (flags & 0xffff0000u) == 0xfbad0000u;
 }
 
 static void stdio_log(const char *fn, FILE *fp) {
@@ -942,6 +975,7 @@ static void stdio_log(const char *fn, FILE *fp) {
 }
 
 int getc(FILE *fp) {
+    fp = bionic_stream(fp);
     if (!fp) return EOF;
     static int (*real)(FILE *) = NULL;
     if (!real) real = (int (*)(FILE *))real_dlsym("getc");
@@ -952,6 +986,7 @@ int getc(FILE *fp) {
 }
 
 int fgetc(FILE *fp) {
+    fp = bionic_stream(fp);
     if (!fp) return EOF;
     static int (*real)(FILE *) = NULL;
     if (!real) real = (int (*)(FILE *))real_dlsym("fgetc");
@@ -962,6 +997,7 @@ int fgetc(FILE *fp) {
 }
 
 char *fgets(char *s, int n, FILE *fp) {
+    fp = bionic_stream(fp);
     if (!fp || n <= 0) return NULL;
     static char *(*real)(char *, int, FILE *) = NULL;
     if (!real) real = (char *(*)(char *, int, FILE *))real_dlsym("fgets");
@@ -972,6 +1008,7 @@ char *fgets(char *s, int n, FILE *fp) {
 }
 
 int ungetc(int c, FILE *fp) {
+    fp = bionic_stream(fp);
     if (!fp) return EOF;
     static int (*real)(int, FILE *) = NULL;
     if (!real) real = (int (*)(int, FILE *))real_dlsym("ungetc");
@@ -982,6 +1019,7 @@ int ungetc(int c, FILE *fp) {
 }
 
 int fflush(FILE *fp) {
+    fp = bionic_stream(fp);
     static int (*real)(FILE *) = NULL;
     if (!real) real = (int (*)(FILE *))real_dlsym("fflush");
     if (fp == NULL) return real(fp);
@@ -992,6 +1030,7 @@ int fflush(FILE *fp) {
 }
 
 int feof(FILE *fp) {
+    fp = bionic_stream(fp);
     if (!fp) return 1;
     static int (*real)(FILE *) = NULL;
     if (!real) real = (int (*)(FILE *))real_dlsym("feof");
@@ -1000,6 +1039,7 @@ int feof(FILE *fp) {
 }
 
 int ferror(FILE *fp) {
+    fp = bionic_stream(fp);
     if (!fp) return 0;
     static int (*real)(FILE *) = NULL;
     if (!real) real = (int (*)(FILE *))real_dlsym("ferror");
@@ -1007,6 +1047,7 @@ int ferror(FILE *fp) {
 }
 
 void clearerr(FILE *fp) {
+    fp = bionic_stream(fp);
     if (!fp) return;
     static void (*real)(FILE *) = NULL;
     if (!real) real = (void (*)(FILE *))real_dlsym("clearerr");
@@ -1014,6 +1055,7 @@ void clearerr(FILE *fp) {
 }
 
 size_t fread(void *p, size_t s, size_t n, FILE *fp) {
+    fp = bionic_stream(fp);
     if (!fp || !p) return 0;
     static size_t (*real)(void *, size_t, size_t, FILE *) = NULL;
     if (!real) real = (size_t (*)(void *, size_t, size_t, FILE *))real_dlsym("fread");
@@ -1024,6 +1066,7 @@ size_t fread(void *p, size_t s, size_t n, FILE *fp) {
 }
 
 size_t fwrite(const void *p, size_t s, size_t n, FILE *fp) {
+    fp = bionic_stream(fp);
     if (!fp || !p) return 0;
     static size_t (*real)(const void *, size_t, size_t, FILE *) = NULL;
     if (!real) real = (size_t (*)(const void *, size_t, size_t, FILE *))real_dlsym("fwrite");
@@ -1034,6 +1077,7 @@ size_t fwrite(const void *p, size_t s, size_t n, FILE *fp) {
 }
 
 int fputc(int c, FILE *fp) {
+    fp = bionic_stream(fp);
     if (!fp) return EOF;
     /* Тот же bypass, что у vfprintf: битый/чужой FILE* не отдаём в glibc,
      * иначе __libc_fatal("invalid stdio handle") убивает процесс. */
@@ -1053,6 +1097,7 @@ int fputc(int c, FILE *fp) {
 }
 
 int fputs(const char *s, FILE *fp) {
+    fp = bionic_stream(fp);
     if (!fp || !s) return EOF;
     static int (*real)(const char *, FILE *) = NULL;
     if (!real) real = (int (*)(const char *, FILE *))real_dlsym("fputs");
@@ -1063,6 +1108,7 @@ int fputs(const char *s, FILE *fp) {
 }
 
 int fseek(FILE *fp, long off, int whence) {
+    fp = bionic_stream(fp);
     if (!fp) return -1;
     static int (*real)(FILE *, long, int) = NULL;
     if (!real) real = (int (*)(FILE *, long, int))real_dlsym("fseek");
@@ -1073,6 +1119,7 @@ int fseek(FILE *fp, long off, int whence) {
 }
 
 int fseeko(FILE *fp, off_t off, int whence) {
+    fp = bionic_stream(fp);
     if (!fp) return -1;
     static int (*real)(FILE *, off_t, int) = NULL;
     if (!real) real = (int (*)(FILE *, off_t, int))real_dlsym("fseeko");
@@ -1083,6 +1130,7 @@ int fseeko(FILE *fp, off_t off, int whence) {
 }
 
 long ftell(FILE *fp) {
+    fp = bionic_stream(fp);
     if (!fp) return -1;
     static long (*real)(FILE *) = NULL;
     if (!real) real = (long (*)(FILE *))real_dlsym("ftell");
@@ -1093,6 +1141,7 @@ long ftell(FILE *fp) {
 }
 
 off_t ftello(FILE *fp) {
+    fp = bionic_stream(fp);
     if (!fp) return -1;
     static off_t (*real)(FILE *) = NULL;
     if (!real) real = (off_t (*)(FILE *))real_dlsym("ftello");
@@ -1103,6 +1152,7 @@ off_t ftello(FILE *fp) {
 }
 
 void rewind(FILE *fp) {
+    fp = bionic_stream(fp);
     if (!fp) return;
     static void (*real)(FILE *) = NULL;
     if (!real) real = (void (*)(FILE *))real_dlsym("rewind");
@@ -1113,6 +1163,7 @@ void rewind(FILE *fp) {
 }
 
 int fclose(FILE *fp) {
+    fp = bionic_stream(fp);
     if (!fp) return 0;
     static int (*real)(FILE *) = NULL;
     if (!real) real = (int (*)(FILE *))real_dlsym("fclose");
@@ -1144,6 +1195,7 @@ int fclose(FILE *fp) {
 }
 
 int fgetpos(FILE *fp, fpos_t *pos) {
+    fp = bionic_stream(fp);
     if (!fp || !pos) return -1;
     static int (*real)(FILE *, fpos_t *) = NULL;
     if (!real) real = (int (*)(FILE *, fpos_t *))real_dlsym("fgetpos");
@@ -1151,6 +1203,7 @@ int fgetpos(FILE *fp, fpos_t *pos) {
 }
 
 int fsetpos(FILE *fp, const fpos_t *pos) {
+    fp = bionic_stream(fp);
     if (!fp || !pos) return -1;
     static int (*real)(FILE *, const fpos_t *) = NULL;
     if (!real) real = (int (*)(FILE *, const fpos_t *))real_dlsym("fsetpos");
@@ -1158,6 +1211,7 @@ int fsetpos(FILE *fp, const fpos_t *pos) {
 }
 
 int vfprintf(FILE *fp, const char *fmt, va_list ap) {
+    fp = bionic_stream(fp);
     if (!fp || !fmt) return 0;
     if (!stdio_ok(fp)) {
         if (getenv("SUP_IOSTRACE"))
@@ -1170,6 +1224,7 @@ int vfprintf(FILE *fp, const char *fmt, va_list ap) {
 }
 
 ssize_t getline(char **lp, size_t *np, FILE *fp) {
+    fp = bionic_stream(fp);
     if (!fp || !lp || !np) return -1;
     static ssize_t (*real)(char **, size_t *, FILE *) = NULL;
     if (!real) real = (ssize_t (*)(char **, size_t *, FILE *))real_dlsym("getline");
