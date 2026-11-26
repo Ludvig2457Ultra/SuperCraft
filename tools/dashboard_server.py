@@ -26,6 +26,7 @@ BUGS = [
     ("xcb-deadlock", "xcb special-event: deadlock с игровым мьютексом"),
     ("ui-callback", "UI-callback: мусор вместо указателя функции"),
     ("firefox-x11", "Firefox: запуск в Wayland давал чёрный эфир"),
+    ("window-capture", "x11grab: захват служебного окна вместо Firefox"),
     ("dns-rtmp", "RTMP: DNS не резолвил a.rtmp.youtube.com"),
     ("43pct", "43% boot barrier: загрузка стоит после снятия deadlock"),
 ]

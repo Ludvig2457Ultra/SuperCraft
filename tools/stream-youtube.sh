@@ -41,23 +41,34 @@ AUDIO_SOURCE="${AUDIO_SOURCE:-loop}"
 WIN_ID="${YT_WINDOW_ID:-}"
 if [[ -z "$WIN_ID" ]]; then
   WIN_ID="$(DISPLAY="$DISPLAY_VALUE" XAUTHORITY="${XAUTHORITY:-}" python3 - <<'PY' 2>/dev/null || true
-from Xlib import display
+from Xlib import display, Xatom
 try:
     d = display.Display()
 except Exception:
     raise SystemExit
-best = (0, 0)
+pid_atom = d.intern_atom('_NET_WM_PID')
+best = (0, 0, 0)  # (приоритет, площадь, id)
 for w in d.screen().root.query_tree().children:
     try:
         if w.get_attributes().map_state != 2:      # IsViewable
             continue
         g = w.get_geometry()
-        area = g.width * g.height
-        if g.width >= 800 and g.height >= 600 and area > best[0]:
-            best = (area, w.id)
+        if g.width < 800 or g.height < 600:
+            continue
+        cls = tuple(c.lower() for c in (w.get_wm_class() or ()))
+        pid = w.get_full_property(pid_atom, Xatom.CARDINAL)
+        if any('firefox' in c or 'navigator' in c for c in cls):
+            priority = 1000
+        elif pid and pid.value:
+            priority = 100
+        else:
+            priority = 0                          # служебные окна Xwayland
+        candidate = (priority, g.width * g.height, w.id)
+        if candidate > best:
+            best = candidate
     except Exception:
         pass
-print(hex(best[1]) if best[1] else "")
+print(hex(best[2]) if best[2] else "")
 PY
 )"
 fi
