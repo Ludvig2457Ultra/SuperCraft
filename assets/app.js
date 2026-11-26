@@ -28,13 +28,14 @@ const ids = [
   'clock', 'heroRemain', 'heroBar', 'heroFoot', 'mclCard', 'mclStatus', 'mclBar',
   'mclHint', 'mclPct', 'scCard', 'scStatus', 'scBar', 'scHint', 'scPct',
   'fixPct', 'fixCount', 'fixBar', 'fixList', 'trackTitle', 'trackArtist',
-  'trackDots', 'apiState', 'bgPhotos',
+  'trackDots', 'apiState', 'bgPhotos', 'toastStack',
 ];
 const dom = Object.fromEntries(ids.map((id) => [id, document.getElementById(id)]));
 
 let fixSignature = '';
 let trackIndex = 0;
 let bgIndex = -1;
+let lastCommitHash = null;
 
 const clamp = (n) => Math.max(0, Math.min(100, Number(n) || 0));
 const r1 = (n) => Number(n || 0).toFixed(1);
@@ -97,6 +98,46 @@ function renderFixes(bugs) {
   }
 }
 
+function showCommitToast(commit) {
+  const stack = dom.toastStack;
+  if (!stack || !commit) return;
+
+  const card = document.createElement('article');
+  card.className = 'toast';
+  card.innerHTML = '<span class="toast__label"></span>' +
+                   '<div class="toast__name"></div>' +
+                   '<div class="toast__desc"></div>';
+  card.querySelector('.toast__label').textContent = 'NEW COMMIT';
+  card.querySelector('.toast__name').textContent = commit.subject || 'Untitled commit';
+  card.querySelector('.toast__desc').textContent =
+    commit.description || 'No description in the commit body.';
+
+  stack.prepend(card);
+  while (stack.children.length > 3) stack.lastElementChild.remove();
+  setTimeout(() => {
+    card.classList.add('toast--out');
+    setTimeout(() => card.remove(), 400);
+  }, 9000);
+}
+
+function notifyCommits(commits) {
+  if (!Array.isArray(commits) || !commits.length) return;
+  if (lastCommitHash === null) {
+    lastCommitHash = commits[0].hash;
+    return;                       // не спамим старыми коммитами при загрузке
+  }
+  const fresh = [];
+  for (const commit of commits) {
+    if (commit.hash === lastCommitHash) break;
+    fresh.push(commit);
+  }
+  if (!fresh.length) return;
+  lastCommitHash = commits[0].hash;
+  fresh.reverse().forEach((commit, i) => {
+    setTimeout(() => showCommitToast(commit), i * 350);
+  });
+}
+
 function render(data) {
   const sc = data.progress.supercraft;
   const mcl = data.progress.mcpelauncher;
@@ -124,6 +165,7 @@ function render(data) {
   dom.fixCount.textContent = `${bugs.fixed} / ${bugs.total}`;
   setBar(dom.fixBar, bugs.percent);
   renderFixes(data.bugs);
+  notifyCommits(data.supercraft && data.supercraft.commits);
 
   dom.clock.textContent = clockText(data.now);
   dom.apiState.textContent = '● CONNECTED';
