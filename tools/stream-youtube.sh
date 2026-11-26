@@ -96,15 +96,22 @@ fi
 RTMP_HOST="${YT_RTMP_HOST:-a.rtmp.youtube.com}"
 RTMP_URL_HOST="$RTMP_HOST"
 if ! getent hosts "$RTMP_HOST" >/dev/null 2>&1; then
-  DOH_IP="$(curl -fsS --max-time 8 \
-    "https://dns.google/resolve?name=${RTMP_HOST}&type=A" | python3 -c '
+  parse_doh() {
+    python3 -c '
 import json, sys
 try:
     ans = json.load(sys.stdin).get("Answer", [])
     print(next((a["data"] for a in ans if a.get("type") == 1), ""))
 except Exception:
     print("")
-' 2>/dev/null || true)"
+' 2>/dev/null || true
+  }
+  DOH_IP="$(curl -fsS --max-time 8 \
+    "https://dns.google/resolve?name=${RTMP_HOST}&type=A" | parse_doh)"
+  if [[ -z "$DOH_IP" ]]; then
+    DOH_IP="$(curl -fsS --max-time 8 -H 'accept: application/dns-json' \
+      "https://cloudflare-dns.com/dns-query?name=${RTMP_HOST}&type=A" | parse_doh)"
+  fi
   if [[ -n "$DOH_IP" ]]; then
     RTMP_URL_HOST="$DOH_IP"
     printf 'DNS для %s недоступен, использую IP из DoH: %s\n' "$RTMP_HOST" "$DOH_IP" >&2
