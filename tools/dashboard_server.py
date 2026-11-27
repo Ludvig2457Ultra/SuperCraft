@@ -44,6 +44,9 @@ BUGS = [
     ("stale-free-memory", "Freed heap blocks kept stale object pointers"),
     ("disk-free-space", "Disk-free JNI call returned zero instead of real space"),
     ("android-version", "Android version JNI calls returned empty values"),
+    ("jni-memory", "JNI memory calls returned zero instead of real RAM"),
+    ("fmod-null-got", "FMOD import left a NULL pointer in the PLT/GOT slot"),
+    ("dashboard-tracking", "Dashboard ignored newly verified Bug-Fix IDs"),
 ]
 BUG_IDS = {bug_id for bug_id, _ in BUGS}
 
