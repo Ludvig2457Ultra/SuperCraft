@@ -454,22 +454,82 @@ static void *sup_malloc(size_t n) {
 }
 
 static size_t g_pgsz;
-/* Игра периодически зовёт free/realloc с мусорным указателем (битые
- * векторы после деструктор-шторма 0x5aacf60: 0x100000000000000 и т.п.
- * с флаговыми старшими битами). Прежде чем читать заголовок [-0x10],
- * проверяем каноничность и отображённость страницы заголовка — иначе
- * сам супераллокатор падает (bias 0x0 в runner, фатально). */
+
+/* Игра зовёт free/realloc десятки тысяч раз в секунду. Раньше каждая проверка
+ * делала mincore() — syscall на каждый вызов; main-поток жил в нём и не мог
+ * продвинуть загрузку, а процессор горел зря. Держим кэш отображений из
+ * /proc/self/maps и обновляем его только при промахе. */
+#define SUP_MAP_CACHE_MAX 8192
+static struct { uintptr_t lo, hi; } sup_map_cache[SUP_MAP_CACHE_MAX];
+static int sup_map_cache_n;
+static int sup_map_cache_ready;
+
+static void sup_map_add(uintptr_t lo, uintptr_t hi) {
+    if (hi <= lo) return;
+    /* Соседние VMA объединяем: иначе thousands of small mappings
+     * переполняли кэш и каждый промах перечитывал все карты дважды. */
+    if (sup_map_cache_n > 0 && sup_map_cache[sup_map_cache_n - 1].hi == lo) {
+        sup_map_cache[sup_map_cache_n - 1].hi = hi;
+        return;
+    }
+    if (sup_map_cache_n >= SUP_MAP_CACHE_MAX) return;
+    sup_map_cache[sup_map_cache_n].lo = lo;
+    sup_map_cache[sup_map_cache_n].hi = hi;
+    ++sup_map_cache_n;
+}
+
+static void sup_map_refresh(void) {
+    int fd = open("/proc/self/maps", O_RDONLY | O_CLOEXEC);
+    if (fd < 0) return;
+    char buf[8192];
+    size_t len = 0;
+    sup_map_cache_n = 0;
+    for (;;) {
+        ssize_t r = read(fd, buf + len, sizeof buf - len - 1);
+        if (r <= 0) break;
+        len += (size_t)r;
+        buf[len] = 0;
+        char *nl;
+        while ((nl = memchr(buf, '\n', len)) != NULL) {
+            char *line = buf;
+            uintptr_t lo = 0, hi = 0;
+            int phase = 0;
+            *nl = 0;
+            for (char *p = line; *p; ++p) {
+                if (*p == '-') { phase = 1; continue; }
+                if (*p == ' ') break;
+                unsigned d;
+                if (*p >= '0' && *p <= '9') d = (unsigned)(*p - '0');
+                else if (*p >= 'a' && *p <= 'f') d = (unsigned)(*p - 'a' + 10);
+                else if (*p >= 'A' && *p <= 'F') d = (unsigned)(*p - 'A' + 10);
+                else break;
+                if (!phase) lo = (lo << 4) | d;
+                else hi = (hi << 4) | d;
+            }
+            sup_map_add(lo, hi);
+            len -= (size_t)(nl - buf) + 1;
+            memmove(buf, nl + 1, len);
+            buf[len] = 0;
+        }
+    }
+    close(fd);
+    sup_map_cache_ready = 1;
+}
+
+static int sup_mapped(uintptr_t a) {
+    if (!sup_map_cache_ready) sup_map_refresh();
+    for (int pass = 0; pass < 2; ++pass) {
+        for (int i = 0; i < sup_map_cache_n; ++i)
+            if (a >= sup_map_cache[i].lo && a < sup_map_cache[i].hi) return 1;
+        if (!pass) sup_map_refresh();
+    }
+    return 0;
+}
+
 static int sup_hdr_sane(const void *p) {
     uintptr_t v = (uintptr_t)p;
     if (v < 0x10000 || v > 0x00007fffffffffffULL) return 0;
-    size_t ps = g_pgsz;
-    if (!ps) ps = (size_t)sysconf(_SC_PAGESIZE);
-    if (ps) {
-        unsigned char vec = 0;
-        if (mincore((void *)((v - 16) & ~(uintptr_t)(ps - 1)), ps, &vec) != 0)
-            return 0;
-    }
-    return 1;
+    return sup_mapped(v - 16) && sup_mapped(v);
 }
 
 static void sup_free(void *p) {
