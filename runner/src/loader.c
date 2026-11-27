@@ -980,10 +980,31 @@ static fm_hook g_fm_hooks[] = {
     { NULL, NULL, NULL }
 };
 
-static void *fm_real_for(const char *name) {
+static fm_hook *fm_hook_for(const char *name) {
+    if (!name) return NULL;
     for (size_t i = 0; g_fm_hooks[i].name; ++i)
-        if (strcmp(g_fm_hooks[i].name, name) == 0) return g_fm_hooks[i].real;
+        if (strcmp(g_fm_hooks[i].name, name) == 0) return &g_fm_hooks[i];
     return NULL;
+}
+
+static void *fm_real_for(const char *name) {
+    fm_hook *h = fm_hook_for(name);
+    if (!h) return NULL;
+    if (!h->real) {
+        /* Реализация может быть ещё не загружена в момент релокации игры.
+         * Пробуем найти её повторно, чтобы shim не дёрнул NULL. */
+        for (size_t d = 0; d < g_ndep; ++d) {
+            ElfW(Sym) *sy = find_symbol(&g_deps[d], name);
+            if (sy && sy->st_shndx != SHN_UNDEF) {
+                h->real = symbol_address(&g_deps[d], sy);
+                if (h->real) {
+                    fprintf(stderr, "FM> resolved late: %s -> %p\n", name, h->real);
+                    break;
+                }
+            }
+        }
+    }
+    return h->real;
 }
 
 static fm_result fn_fm_sys_create(void **sys, unsigned int version) {
@@ -993,8 +1014,17 @@ static fm_result fn_fm_sys_create(void **sys, unsigned int version) {
     fprintf(stderr, "FM> FMOD_System_Create(sys=%p ver=%#x) from ",
             (void *)sys, version);
     resolve_frame(__builtin_return_address(0));
-    fm_result r = ((fm_result (*)(void **, unsigned int))
-                   fm_real_for("FMOD_System_Create"))(sys, version);
+    fm_result (*real)(void **, unsigned int) =
+        (fm_result (*)(void **, unsigned int))fm_real_for("FMOD_System_Create");
+    if (!real) {
+        /* Раньше GOT SLOT оставался NULL: переход по нему давал SEGV (nil)
+         * с адресом возврата game+0xe43f648. Игра сама проверяет код ошибки
+         * и обнуляет указатель системы — возвращаем ошибку, не падаем. */
+        fprintf(stderr, "FM> FMOD_System_Create: real symbol missing -> FMOD_ERR_INITIALIZATION\n");
+        if (sys) *sys = NULL;
+        return 31;
+    }
+    fm_result r = real(sys, version);
     if (sys && *sys) fprintf(stderr, "FM>   -> %d system=%p\n", r, *sys);
     else fprintf(stderr, "FM>   -> %d\n", r);
     return r;
@@ -1176,22 +1206,24 @@ static void apply_one_reloc(Obj *o, const ElfW(Rela) *r) {
                         o->path, symname, (size_t)r->r_offset, addr, def,
                         (unsigned long long)r->r_addend);
             }
+            fm_hook *fh = fm_hook_for(symname);
             if (symname && def) {
                 if (o->dynsym_count) {
                     int is_import = 0;
                     if (symi < o->dynsym_count)
                         is_import = o->dynsym[symi].st_shndx == SHN_UNDEF;
-                    if (is_import) {
-                        for (size_t hi = 0; g_fm_hooks[hi].name; ++hi) {
-                            if (strcmp(symname, g_fm_hooks[hi].name) == 0) {
-                                if (!g_fm_hooks[hi].real) g_fm_hooks[hi].real = def;
-                                def = g_fm_hooks[hi].shim;
-                                break;
-                            }
-                        }
+                    if (is_import && fh) {
+                        if (!fh->real) fh->real = def;
+                        def = fh->shim;
                     }
                 }
                 patch_slot(addr, (char *)def + r->r_addend);
+            } else if (fh && fh->shim) {
+                /* Жёсткий SEGV (nil) с возвратом game+0xe43f648: неразрешённый
+                 * FMOD_System_Create оставлял NULL в GOT. Shim вернёт ошибку
+                 * вместо прыжка по нулевому указателю. */
+                fprintf(stderr, "FM> unresolved import %s -> shim (was NULL GOT)\n", symname);
+                patch_slot(addr, (char *)fh->shim + r->r_addend);
             } else if (symname && weak) {
                 patch_slot(addr, NULL);
             } else if (symname) {
