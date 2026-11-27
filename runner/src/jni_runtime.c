@@ -10,6 +10,7 @@
 #include <pthread.h>
 #include <stdint.h>
 #include <sys/statvfs.h>
+#include <sys/sysinfo.h>
 #include <limits.h>
 
 void sup_render_watch(void);   /* compat.c: дамп стеков при остановке свапов */
@@ -702,6 +703,33 @@ typedef long long (*f6)(void *, void *, long long, long long, long long, long lo
 typedef long long (*f7)(void *, void *, long long, long long, long long, long long, long long);
 typedef long long (*f8)(void *, void *, long long, long long, long long, long long, long long, long long);
 
+/* MainActivity.getFreeMemory()/getTotalMemory()/getUsedMemory() must never
+ * report zero: the engine treats 0 bytes as "out of memory" and stalls the
+ * load.  sysinfo() gives the real numbers; 4 GiB is the safe fallback. */
+#define SUP_MEM_FALLBACK 4294967296LL
+static long long sup_mem_kind(int kind) {
+    struct sysinfo si;
+    memset(&si, 0, sizeof si);
+    if (sysinfo(&si) == 0) {
+        unsigned long long unit = si.mem_unit ? si.mem_unit : 1;
+        unsigned long long total = (unsigned long long)si.totalram * unit;
+        unsigned long long free_b =
+            ((unsigned long long)si.freeram + si.bufferram) * unit;
+        if (kind == 0)                     /* total */
+            return total ? (long long)total : SUP_MEM_FALLBACK;
+        if (kind == 1) {                   /* free */
+            if (!free_b) free_b = total / 8;
+            return free_b ? (long long)free_b : SUP_MEM_FALLBACK;
+        }
+        {                                   /* used */
+            unsigned long long used = total > free_b ? total - free_b : total / 16;
+            if (!used) used = 1;
+            return (long long)used;
+        }
+    }
+    return SUP_MEM_FALLBACK;
+}
+
 static jvalue call_method(JNIEnv *e, jobject obj, jmethodID id, jvalue *args, int n, const char *types) {
     jvalue ret;
     memset(&ret, 0, sizeof(ret));
@@ -799,7 +827,7 @@ static jvalue call_method(JNIEnv *e, jobject obj, jmethodID id, jvalue *args, in
          * доходил до создания графического контекста. */
         {
             const char *nm = m->name;
-            long v = 0;
+            long long v = 0;
             int hit = 0;
             if (!strcmp(nm, "getDisplayWidth") || !strcmp(nm, "getScreenWidth")) { v = 1280; hit = 1; }
             else if (!strcmp(nm, "getDisplayHeight") || !strcmp(nm, "getScreenHeight")) { v = 720; hit = 1; }
@@ -807,8 +835,10 @@ static jvalue call_method(JNIEnv *e, jobject obj, jmethodID id, jvalue *args, in
             else if (!strcmp(nm, "getNumCores")) { v = 4; hit = 1; }
             else if (!strcmp(nm, "getNumClusters")) { v = 1; hit = 1; }
             else if (!strcmp(nm, "getPerformanceCoreCount")) { v = 2; hit = 1; }
-            else if (!strcmp(nm, "getTotalMemory")) { v = 4096LL * 1024 * 1024; hit = 1; }
-            else if (!strcmp(nm, "getMemoryLimit")) { v = 4096LL * 1024 * 1024; hit = 1; }
+            else if (!strcmp(nm, "getTotalMemory")) { v = sup_mem_kind(0); hit = 1; }
+            else if (!strcmp(nm, "getFreeMemory")) { v = sup_mem_kind(1); hit = 1; }
+            else if (!strcmp(nm, "getUsedMemory")) { v = sup_mem_kind(2); hit = 1; }
+            else if (!strcmp(nm, "getMemoryLimit")) { v = sup_mem_kind(0); hit = 1; }
             else if (!strcmp(nm, "getIsRooted")) { v = 0; hit = 1; }
             else if (!strcmp(nm, "isChromebook")) { v = 0; hit = 1; }
             else if (!strcmp(nm, "isTablet")) { v = 0; hit = 1; }
@@ -823,7 +853,7 @@ static jvalue call_method(JNIEnv *e, jobject obj, jmethodID id, jvalue *args, in
             else if (!strcmp(nm, "getBatteryTemperature")) { v = 250; hit = 1; } /* 25.0C */
             else if (!strcmp(nm, "getLowPowerModeEnabled")) { v = 0; hit = 1; }
             if (hit) {
-                fprintf(stderr, "JNI: call_method.%s%s -> %ld\n", nm, m->sig, v);
+                fprintf(stderr, "JNI: call_method.%s%s -> %lld\n", nm, m->sig, v);
                 fflush(stderr);
                 if (strchr(m->sig, 'Z')) ret.z = (jboolean)(v != 0);
                 else if (strchr(m->sig, 'J')) ret.j = (jlong)v;
@@ -878,24 +908,18 @@ static jvalue call_method(JNIEnv *e, jobject obj, jmethodID id, jvalue *args, in
             /* getFreeMemory: движок зовёт его каждый тик и по нему решает,
              * есть ли смысл грузить дальше. Заглушка 0 = «памяти нет» —
              * загрузка встаёт на ~43%. Отдаём реально свободную память. */
-            if (m->name && strcmp(m->name, "getFreeMemory") == 0 &&
-                close && close[1] == 'J') {
-                unsigned long long kb = 0;
-                FILE *mf = fopen("/proc/meminfo", "r");
-                if (mf) {
-                    char line[256];
-                    while (fgets(line, sizeof line, mf)) {
-                        if (sscanf(line, "MemAvailable: %llu kB", &kb) == 1)
-                            break;
-                    }
-                    fclose(mf);
-                }
-                if (!kb) kb = 4ULL * 1024 * 1024; /* запасной вариант: 4 ГБ */
-                ret.j = (jlong)(kb * 1024ULL);
+            if (m->name && close && close[1] == 'J' &&
+                (!strcmp(m->name, "getFreeMemory") ||
+                 !strcmp(m->name, "getTotalMemory") ||
+                 !strcmp(m->name, "getUsedMemory"))) {
+                int kind = !strcmp(m->name, "getFreeMemory") ? 1 :
+                           !strcmp(m->name, "getUsedMemory") ? 2 : 0;
+                long long bytes = sup_mem_kind(kind);
+                ret.j = (jlong)bytes;
                 static int gm_n;
                 if (gm_n++ % 2000 == 0) {
-                    fprintf(stderr, "JNI: getFreeMemory -> %llu МБ\n",
-                            (unsigned long long)(kb / 1024));
+                    fprintf(stderr, "JNI: %s -> %lld MiB\n",
+                            m->name, bytes / (1024LL * 1024LL));
                     fflush(stderr);
                 }
                 return ret;
